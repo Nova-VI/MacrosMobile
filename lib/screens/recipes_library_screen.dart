@@ -165,8 +165,8 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: AppColors.border)),
-        title: Text('Amount of ${food.name}', style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: AppColors.border)),
+        title: Text('Amount of ${food.name}', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +178,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               onTap: () => _selectAll(_ingredientWeightController),
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
+              style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
               decoration: const InputDecoration(labelText: 'Weight (g)'),
             ),
           ],
@@ -190,7 +190,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -309,7 +309,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(message, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -429,13 +429,13 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               child: TextField(
                 controller: _librarySearchController,
                 onChanged: (_) => setState(() {}),
-                style: const TextStyle(color: AppColors.textMain),
+                style: TextStyle(color: AppColors.textMain),
                 decoration: InputDecoration(
                   hintText: 'Search saved library foods...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+                  prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
                   suffixIcon: _librarySearchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                          icon: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
                           onPressed: () {
                             _librarySearchController.clear();
                             setState(() {});
@@ -518,7 +518,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Column(
@@ -543,7 +543,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   tooltip: 'Toggle Favorite',
                 ),
                 const SizedBox(width: 4),
-                Text(food.emoji.isNotEmpty ? food.emoji : '🍽️', style: const TextStyle(fontSize: 18)),
+                Text(food.emoji.isNotEmpty ? food.emoji : '🍽️', style: TextStyle(fontSize: 18)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -553,12 +553,12 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                         food.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Base: ${food.servingSizeG.round()}${food.baseUnit} ${food.servingName.isNotEmpty ? '(${food.servingName})' : ''}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                        style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -576,7 +576,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
+                  icon: Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
                   splashRadius: 18,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
@@ -595,7 +595,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   tooltip: 'Edit Item',
                 ),
                 IconButton(
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
+                  icon: Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
                   splashRadius: 18,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
@@ -637,7 +637,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           children: [
             Text(
               label.toUpperCase(),
-              style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
+              style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
             ),
             const SizedBox(height: 1),
             Text(
@@ -660,7 +660,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.menu_book_rounded, size: 36, color: AppColors.textMuted),
+          Icon(Icons.menu_book_rounded, size: 36, color: AppColors.textMuted),
           const SizedBox(height: 12),
           const Text('No Foods Found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain)),
           const SizedBox(height: 4),
@@ -676,9 +676,9 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
         title: const Text('Delete Food', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: Text('Remove "${food.name}" from your library? Past daily logs will remain intact.', style: const TextStyle(color: AppColors.textMuted)),
+        content: Text('Remove "${food.name}" from your library? Past daily logs will remain intact.', style: TextStyle(color: AppColors.textMuted)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
@@ -686,7 +686,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -769,7 +769,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
             children: [
               Text(
                 _editingRecipeId != null ? 'Edit Composite Recipe' : 'New Recipe',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
               if (_editingRecipeId != null)
                 InkWell(
@@ -810,14 +810,14 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                     border: Border.all(color: AppColors.border),
                   ),
                   alignment: Alignment.center,
-                  child: Text(_recipeEmoji, style: const TextStyle(fontSize: 26)),
+                  child: Text(_recipeEmoji, style: TextStyle(fontSize: 26)),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
                   controller: _recipeNameController,
-                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
                   decoration: const InputDecoration(labelText: 'Recipe Name', hintText: 'e.g. Protein Pancakes'),
                 ),
               ),
@@ -827,7 +827,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           TextField(
             controller: _recipeUnitController,
             onTap: () => _selectAll(_recipeUnitController),
-            style: const TextStyle(color: AppColors.textMain),
+            style: TextStyle(color: AppColors.textMain),
             decoration: const InputDecoration(
               labelText: 'Portion Unit Name (optional)',
               hintText: 'e.g. portion, bowl, slice',
@@ -857,12 +857,12 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           TextField(
             controller: _ingredientSearchController,
             onChanged: _onIngredientSearchChanged,
-            style: const TextStyle(color: AppColors.textMain),
+            style: TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
               hintText: 'Search ingredient from library or USDA...',
-              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+              prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
               suffixIcon: _isSearchingIngredients
-                  ? const Padding(
+                  ?  Padding(
                       padding: EdgeInsets.all(12),
                       child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
                     )
@@ -886,16 +886,16 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   children: [
                     ..._ingredientLocalResults.map((food) => ListTile(
                           dense: true,
-                          leading: Text(food.emoji, style: const TextStyle(fontSize: 18)),
-                          title: Text(food.name, style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
-                          trailing: const Text('LIBRARY', style: TextStyle(color: AppColors.primary, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                          leading: Text(food.emoji, style: TextStyle(fontSize: 18)),
+                          title: Text(food.name, style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
+                          trailing:  Text('LIBRARY', style: TextStyle(color: AppColors.primary, fontSize: 9.5, fontWeight: FontWeight.w800)),
                           onTap: () => _openIngredientWeightModal(food),
                         )),
                     ..._ingredientUsdaResults.map((usda) => ListTile(
                           dense: true,
                           leading: const Text('🍽️', style: TextStyle(fontSize: 18)),
-                          title: Text(usda['description'], style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
-                          trailing: const Text('USDA', style: TextStyle(color: AppColors.secondary, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                          title: Text(usda['description'], style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
+                          trailing:  Text('USDA', style: TextStyle(color: AppColors.secondary, fontSize: 9.5, fontWeight: FontWeight.w800)),
                           onTap: () async {
                             final details = await _usdaService.getFoodDetails(usda['fdcId']);
                             if (details != null) _openIngredientWeightModal(details);
@@ -925,8 +925,8 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('INGREDIENTS LIST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
-              Text('${_recipeIngredients.length} added', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+               Text('INGREDIENTS LIST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
+              Text('${_recipeIngredients.length} added', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ],
           ),
           const SizedBox(height: 10),
@@ -955,16 +955,16 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   children: [
                     Row(
                       children: [
-                        Text(ing.emoji, style: const TextStyle(fontSize: 16)),
+                        Text(ing.emoji, style: TextStyle(fontSize: 16)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             '${ing.name} (${ing.quantityG.round()}g)',
-                            style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13.5),
+                            style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13.5),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.danger),
+                          icon: Icon(Icons.close_rounded, size: 18, color: AppColors.danger),
                           splashRadius: 18,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
@@ -979,10 +979,10 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        Text('${ing.macros.calories.round()} kcal', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                        Text('P: ${ing.macros.proteinG.toStringAsFixed(1)}g', style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
-                        Text('C: ${ing.macros.carbsG.toStringAsFixed(1)}g', style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
-                        Text('F: ${ing.macros.fatG.toStringAsFixed(1)}g', style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+                        Text('${ing.macros.calories.round()} kcal', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                        Text('P: ${ing.macros.proteinG.toStringAsFixed(1)}g', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+                        Text('C: ${ing.macros.carbsG.toStringAsFixed(1)}g', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
+                        Text('F: ${ing.macros.fatG.toStringAsFixed(1)}g', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
                       ],
                     ),
                   ],
@@ -1012,7 +1012,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('RECIPE TOTAL NUTRITION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
-                  Text('Total Batch Weight: ${_totalRecipeGrams.round()}g', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMain)),
+                  Text('Total Batch Weight: ${_totalRecipeGrams.round()}g', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMain)),
                 ],
               ),
               TextButton(

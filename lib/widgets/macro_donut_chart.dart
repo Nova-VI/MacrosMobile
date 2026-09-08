@@ -44,7 +44,7 @@ class MacroDonutChart extends StatelessWidget {
                     builder: (context, val, _) {
                       return Text(
                         val.round().toString(),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textMain,

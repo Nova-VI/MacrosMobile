@@ -103,7 +103,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.restaurant_menu_rounded,
                     size: 56,
                     color: AppColors.primary,
@@ -123,7 +123,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   Text(
                     _isSignUp ? 'Create an account to sync your macros' : 'Sign in to access your cloud logs',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       color: AppColors.textMuted,
                     ),
@@ -135,7 +135,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     onPressed: _isLoading ? null : _submitGoogleAuth,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: AppColors.border),
                       backgroundColor: AppColors.surface,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -178,7 +178,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: AppColors.textMain),
+                    style: TextStyle(color: AppColors.textMain),
                     decoration: const InputDecoration(
                       labelText: 'Email Address',
                       prefixIcon: Icon(Icons.email_outlined, color: AppColors.textMuted, size: 20),
@@ -191,10 +191,10 @@ class _AuthScreenState extends State<AuthScreen> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    style: const TextStyle(color: AppColors.textMain),
+                    style: TextStyle(color: AppColors.textMain),
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 20),
+                      prefixIcon: Icon(Icons.lock_outline, color: AppColors.textMuted, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.visibility_off : Icons.visibility,
@@ -220,7 +220,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       child: Text(
                         _errorMessage!,
-                        style: const TextStyle(color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -244,7 +244,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     children: [
                       Text(
                         _isSignUp ? 'Already have an account?' : "Don't have an account?",
-                        style: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+                        style: TextStyle(color: AppColors.textMuted, fontSize: 14),
                       ),
                       TextButton(
                         onPressed: () {

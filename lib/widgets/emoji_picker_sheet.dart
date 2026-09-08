@@ -46,7 +46,7 @@ class EmojiPickerSheet extends StatelessWidget {
     return Container(
       height: MediaQuery.of(context).size.height * 0.58,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -84,7 +84,7 @@ class EmojiPickerSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         cat['name'].toString().toUpperCase(),
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
                       ),
                     ),
                     GridView.builder(
@@ -111,7 +111,7 @@ class EmojiPickerSheet extends StatelessWidget {
                               border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
                             ),
                             alignment: Alignment.center,
-                            child: Text(emojis[eIdx], style: const TextStyle(fontSize: 22)),
+                            child: Text(emojis[eIdx], style: TextStyle(fontSize: 22)),
                           ),
                         );
                       },

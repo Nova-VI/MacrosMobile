@@ -1,20 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ThemeManager {
+  static final ValueNotifier<int> notifier = ValueNotifier(0);
+
+  static Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    final acc = prefs.getInt('theme_accent');
+    final bg = prefs.getInt('theme_bg');
+    final sf = prefs.getInt('theme_surface');
+
+    if (acc != null) AppColors.primary = Color(acc);
+    if (bg != null) AppColors.background = Color(bg);
+    if (sf != null) AppColors.surface = Color(sf);
+  }
+
+  // Synchronous immediate in-memory update (0ms lag)
+  static void setAccent(Color color) {
+    AppColors.primary = color;
+    notifier.value++; // Forces all listening screens to repaint immediately
+    HapticFeedback.lightImpact();
+
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setInt('theme_accent', color.value);
+    });
+  }
+
+  // Synchronous immediate in-memory update (0ms lag)
+  static void setBackground(Color bg, Color surface) {
+    AppColors.background = bg;
+    AppColors.surface = surface;
+    notifier.value++; // Forces all listening screens to repaint immediately
+    HapticFeedback.lightImpact();
+
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setInt('theme_bg', bg.value);
+      prefs.setInt('theme_surface', surface.value);
+    });
+  }
+}
 
 class AppColors {
-  //Deep AMOLED Dark Palette
-  static const Color background = Color(0xFF08080A);
-  static const Color surface = Color(0xFF16161C);  
+  static Color background = const Color(0xFF08080A);
+  static Color surface = const Color(0xFF16161C);
+  static Color primary = const Color(0xFF10B981);
+
   static const Color surfaceHover = Color(0xFF22222B);
   static const Color border = Color(0xFF272732);
-
-  //Vibrant Accents
-  static const Color primary = Color(0xFF10B981);    // Emerald
-  static const Color primaryHover = Color(0xFF059669);
-  static const Color secondary = Color(0xFF3B82F6);  // Galaxy Blue
-  static const Color warning = Color(0xFFF59E0B);    // Amber
-  static const Color danger = Color(0xFFEF4444);     // Crimson Red
-
-  //Typography Tones
+  static const Color secondary = Color(0xFF3B82F6);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color danger = Color(0xFFEF4444);
   static const Color textMain = Color(0xFFF9FAFB);
   static const Color textMuted = Color(0xFF9898A6);
 }
@@ -25,8 +61,8 @@ class AppTheme {
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.background,
       primaryColor: AppColors.primary,
-      splashFactory: InkSparkle.splashFactory, // Modern fluid touch ripples
-      colorScheme: const ColorScheme.dark(
+      splashFactory: InkSparkle.splashFactory,
+      colorScheme: ColorScheme.dark(
         primary: AppColors.primary,
         secondary: AppColors.secondary,
         surface: AppColors.surface,
@@ -34,20 +70,16 @@ class AppTheme {
         onPrimary: Colors.white,
         onSurface: AppColors.textMain,
       ),
-
-      // Squircle Island Cards (24px radius)
       cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: AppColors.border, width: 1),
+          side: BorderSide(color: AppColors.border, width: 1),
         ),
         margin: EdgeInsets.zero,
       ),
-
-      // Large Action Bar
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -60,29 +92,25 @@ class AppTheme {
         ),
         iconTheme: IconThemeData(color: AppColors.textMain),
       ),
-
-      // Pill-shaped & Soft Rounded Input Fields
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
-        labelStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
+        hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
+        labelStyle: TextStyle(color: AppColors.textMuted, fontSize: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
-
-      // Rounded Action Buttons
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
@@ -97,13 +125,6 @@ class AppTheme {
             fontWeight: FontWeight.w700,
             letterSpacing: -0.2,
           ),
-        ),
-      ),
-
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
-          textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
       fontFamily: 'Roboto',

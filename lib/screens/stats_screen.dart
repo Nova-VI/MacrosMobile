@@ -150,7 +150,7 @@ class _StatsScreenState extends State<StatsScreen> {
             alignment: Alignment.center,
             child: Text(
               '$score%',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
                 color: AppColors.primary,
@@ -178,7 +178,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       ),
                       child: Text(
                         profile.goalType.name.toUpperCase(),
-                        style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                       ),
                     ),
                   ],
@@ -190,7 +190,7 @@ class _StatsScreenState extends State<StatsScreen> {
                       : score >= 65
                           ? 'Consistent progress. Watch your protein minimums and portion sizes.'
                           : 'Adherence slipping. Prioritize protein and stay within your target energy window.',
-                  style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.3),
+                  style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.3),
                 ),
               ],
             ),
@@ -322,12 +322,12 @@ class _StatsScreenState extends State<StatsScreen> {
       children: [
         Text(
           value,
-          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.4),
+          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.4),
         ),
         const SizedBox(height: 2),
         Text(
           label.toUpperCase(),
-          style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.4),
+          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.4),
         ),
       ],
     );
@@ -419,7 +419,7 @@ class _StatsScreenState extends State<StatsScreen> {
             children: [
               Text(
                 label.toUpperCase(),
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -437,12 +437,12 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.3),
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.3),
           ),
           const SizedBox(height: 2),
           Text(
             target,
-            style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -489,8 +489,8 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: DropdownButton<String>(
                     value: _currentMetric,
                     dropdownColor: AppColors.surface,
-                    style: const TextStyle(color: AppColors.textMain, fontSize: 12, fontWeight: FontWeight.w700),
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 16),
+                    style: TextStyle(color: AppColors.textMain, fontSize: 12, fontWeight: FontWeight.w700),
+                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 16),
                     onChanged: (val) {
                       if (val != null) setState(() => _currentMetric = val);
                     },
@@ -631,7 +631,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 if (val >= ceiling || val == 0) return const SizedBox.shrink();
                 return Text(
                   val.round().toString(),
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.w600),
                 );
               },
             ),
@@ -655,7 +655,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     '${parts[1]}/${parts[2]}',
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700),
                   ),
                 );
               },
@@ -665,21 +665,21 @@ class _StatsScreenState extends State<StatsScreen> {
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
             getTooltipColor: (_) => AppColors.surface,
-            tooltipBorder: const BorderSide(color: AppColors.border),
+            tooltipBorder: BorderSide(color: AppColors.border),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final dateStr = dateKeys[group.x];
               final unit = _currentMetric == 'calories' ? 'kcal' : 'g';
               return BarTooltipItem(
                 '$dateStr\n',
-                const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
                 children: [
                   TextSpan(
                     text: '${rod.toY.round()} $unit',
-                    style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w800),
+                    style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w800),
                   ),
                   TextSpan(
                     text: '\nTarget: ${targetValue.round()} $unit',
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 10),
                   ),
                 ],
               );
@@ -727,7 +727,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: Center(
                     child: Text(
                       hasData ? '${totalGrams.round()}g' : '0g',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textMain),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textMain),
                     ),
                   ),
                 ),
@@ -759,14 +759,14 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
           ],
         ),
         Row(
           children: [
-            Text(grams, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+            Text(grams, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
             const SizedBox(width: 6),
-            Text('($pct)', style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+            Text('($pct)', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           ],
         ),
       ],
@@ -875,8 +875,8 @@ class _StatsScreenState extends State<StatsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(name, style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-              Text(value, style: const TextStyle(fontSize: 12, color: AppColors.textMain, fontWeight: FontWeight.w800)),
+              Text(name, style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+              Text(value, style: TextStyle(fontSize: 12, color: AppColors.textMain, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 6),
@@ -907,7 +907,7 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+           Row(
             children: [
               Icon(Icons.lightbulb_outline_rounded, size: 18, color: AppColors.primary),
               SizedBox(width: 8),
@@ -929,12 +929,12 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.icon, style: const TextStyle(fontSize: 16)),
+                      Text(item.icon, style: TextStyle(fontSize: 16)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           item.text,
-                          style: const TextStyle(fontSize: 13, color: AppColors.textMain, height: 1.4, fontWeight: FontWeight.w500),
+                          style: TextStyle(fontSize: 13, color: AppColors.textMain, height: 1.4, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ],
@@ -1048,7 +1048,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final margin = math.max(100.0, target * 0.05);
 
     if (avg >= target - margin && avg <= target + margin) {
-      return const _StatusInfo('On Track', AppColors.primary);
+      return  _StatusInfo('On Track', AppColors.primary);
     }
 
     if (goalOffset > 0) {
@@ -1065,7 +1065,7 @@ class _StatsScreenState extends State<StatsScreen> {
   _StatusInfo _getProteinStatus(double avg, double target, int days) {
     if (days == 0) return const _StatusInfo('No Data', AppColors.textMuted);
     final margin = math.max(10.0, target * 0.10);
-    if (avg >= target - margin) return const _StatusInfo('On Track', AppColors.primary);
+    if (avg >= target - margin) return  _StatusInfo('On Track', AppColors.primary);
     return const _StatusInfo('Needs Boost', AppColors.warning);
   }
 

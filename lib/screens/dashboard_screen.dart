@@ -90,7 +90,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context, child) {
         return Theme(
           data: AppTheme.darkTheme.copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme:  ColorScheme.dark(
               primary: AppColors.primary,
               surface: AppColors.surface,
               onSurface: AppColors.textMain,
@@ -139,7 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textMain, size: 26),
+                              icon: Icon(Icons.chevron_left_rounded, color: AppColors.textMain, size: 26),
                               onPressed: () => _goToPageOffset(-1),
                               tooltip: 'Previous Day',
                             ),
@@ -150,11 +150,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
+                                    Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
                                     const SizedBox(width: 8),
                                     Text(
                                       _getDateHeaderTitle(currentDate),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
                                         color: AppColors.textMain,
@@ -166,7 +166,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textMain, size: 26),
+                              icon: Icon(Icons.chevron_right_rounded, color: AppColors.textMain, size: 26),
                               onPressed: () => _goToPageOffset(1),
                               tooltip: 'Next Day',
                             ),
@@ -480,7 +480,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                   const SizedBox(width: 5),
                   Text(
                     label,
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
                   ),
                 ],
               ),
@@ -546,7 +546,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                 ),
                 child: Text(
                   '$count',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textMuted,
@@ -562,7 +562,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 8),
           ),
-          icon: const Icon(Icons.add_rounded, size: 18),
+          icon: Icon(Icons.add_rounded, size: 18),
           label: const Text('Add Food', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         ),
       ],
@@ -585,7 +585,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
             children: [
               Text(
                 phase.title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
                   color: AppColors.textMain,
@@ -600,7 +600,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                 ),
                 child: Text(
                   '${phaseCals.round()} kcal',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     color: AppColors.primary,
@@ -655,7 +655,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerLeft,
-        child: const Icon(Icons.edit_rounded, color: Colors.white, size: 22),
+        child: Icon(Icons.edit_rounded, color: Colors.white, size: 22),
       ),
       secondaryBackground: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -665,7 +665,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerRight,
-        child: const Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 22),
+        child: Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 22),
       ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
@@ -704,7 +704,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                             children: [
                               Text(
                                 log.emoji.isNotEmpty ? log.emoji : '🍽️',
-                                style: const TextStyle(fontSize: 16),
+                                style: TextStyle(fontSize: 16),
                               ),
                               const SizedBox(width: 6),
                               Expanded(
@@ -712,7 +712,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                                   log.foodName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.textMain,
@@ -725,7 +725,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                           const SizedBox(height: 2),
                           Text(
                             '${timeStr.isNotEmpty ? '$timeStr • ' : ''}${log.servings % 1 == 0 ? log.servings.toInt() : log.servings.toStringAsFixed(1)} $servingLabel (${log.servingSizeG.round()}${log.baseUnit})',
-                            style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                            style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
@@ -734,7 +734,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
+                          icon: Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
                           splashRadius: 18,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
@@ -743,7 +743,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                         ),
                         const SizedBox(width: 4),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
+                          icon: Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
                           splashRadius: 18,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
@@ -819,7 +819,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           children: [
             Text(
               label.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 8.5,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textMuted,
@@ -845,8 +845,8 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('$label: ', style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-        Text(val, style: const TextStyle(fontSize: 11, color: AppColors.textMain, fontWeight: FontWeight.w700)),
+        Text('$label: ', style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
+        Text(val, style: TextStyle(fontSize: 11, color: AppColors.textMain, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -868,7 +868,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
               color: AppColors.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
+            child: Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
           ),
           const SizedBox(height: 10),
           const Text(
@@ -884,7 +884,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           const SizedBox(height: 14),
           ElevatedButton.icon(
             onPressed: () => widget.onNavigateToLogWithDate(widget.pageDate),
-            icon: const Icon(Icons.add_rounded, size: 18),
+            icon: Icon(Icons.add_rounded, size: 18),
             label: const Text('Log Food Now'),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(150, 38),
@@ -904,10 +904,10 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.border),
+          side: BorderSide(color: AppColors.border),
         ),
         title: const Text('Delete Entry', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: Text('Remove "${log.foodName}" from this day\'s log?', style: const TextStyle(color: AppColors.textMuted)),
+        content: Text('Remove "${log.foodName}" from this day\'s log?', style: TextStyle(color: AppColors.textMuted)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
@@ -915,7 +915,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

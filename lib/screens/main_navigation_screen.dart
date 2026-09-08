@@ -88,7 +88,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 children: [
                   Text(
                     titles[_currentIndex],
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
                       color: AppColors.textMain,
@@ -124,7 +124,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                               backgroundImage: NetworkImage(photoUrl),
                             );
                           }
-                          return const Icon(
+                          return Icon(
                             Icons.person_rounded,
                             size: 20,
                             color: AppColors.primary,

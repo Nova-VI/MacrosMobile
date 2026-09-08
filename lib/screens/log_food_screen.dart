@@ -590,7 +590,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       SnackBar(
         content: Text(
           message,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
@@ -655,12 +655,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
-        style: const TextStyle(color: AppColors.textMain),
+        style: TextStyle(color: AppColors.textMain),
         decoration: InputDecoration(
           hintText: 'Search foods (e.g. Chicken breast)...',
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
           suffixIcon: _isSearching
-              ? const Padding(
+              ?  Padding(
                   padding: EdgeInsets.all(12),
                   child: SizedBox(
                     width: 16,
@@ -670,7 +670,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                 )
               : _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                      icon: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
                       onPressed: () {
                         _searchController.clear();
                         _onSearchChanged('');
@@ -735,12 +735,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     return ListTile(
       dense: true,
       onTap: onTap,
-      leading: Text(emoji, style: const TextStyle(fontSize: 18)),
+      leading: Text(emoji, style: TextStyle(fontSize: 18)),
       title: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13.5),
+        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13.5),
       ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -769,7 +769,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -795,11 +795,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(item.emoji.isNotEmpty ? item.emoji : '🍽️', style: const TextStyle(fontSize: 15)),
+                      Text(item.emoji.isNotEmpty ? item.emoji : '🍽️', style: TextStyle(fontSize: 15)),
                       const SizedBox(width: 6),
                       Text(
                         item.name,
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textMain),
                       ),
                     ],
                   ),
@@ -853,7 +853,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                         color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text(
+                      child:  Text(
                         'Library',
                         style: TextStyle(color: AppColors.primary, fontSize: 10.5, fontWeight: FontWeight.w800),
                       ),
@@ -885,7 +885,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     border: Border.all(color: _isLibraryBound ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border),
                   ),
                   alignment: Alignment.center,
-                  child: Text(_selectedEmoji, style: const TextStyle(fontSize: 26)),
+                  child: Text(_selectedEmoji, style: TextStyle(fontSize: 26)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -893,7 +893,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                 child: TextField(
                   controller: _nameController,
                   onChanged: _onFoodNameChanged,
-                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
                   decoration: InputDecoration(
                     labelText: 'Food Name',
                     hintText: 'e.g. Scrambled Eggs',
@@ -940,7 +940,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     color: AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
+                  child:  Text(
                     'From library',
                     style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.primary),
                   ),
@@ -960,12 +960,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
+                  Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Base serving: ${_currentBaseFood?.servingSizeG.round()}${_selectedBaseUnit} ${_servingUnitController.text.isNotEmpty ? '(${_servingUnitController.text})' : ''}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
                     ),
                   ),
                 ],
@@ -983,7 +983,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     onTap: () => _selectAll(_servingSizeController),
                     onChanged: _onBaseServingChanged,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
                     decoration: const InputDecoration(labelText: 'Base Serving'),
                   ),
                 ),
@@ -1003,8 +1003,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                       child: DropdownButton<String>(
                         value: _selectedBaseUnit,
                         dropdownColor: AppColors.surface,
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
-                        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
+                        icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
+                        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _selectedBaseUnit = val);
@@ -1026,7 +1026,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               controller: _servingUnitController,
               onTap: () => _selectAll(_servingUnitController),
               onChanged: (_) => _onManualNutrientTyped(),
-              style: const TextStyle(color: AppColors.textMain),
+              style: TextStyle(color: AppColors.textMain),
               decoration: const InputDecoration(
                 labelText: 'Serving Unit Name (optional)',
                 hintText: 'e.g. slice, cup, portion',
@@ -1044,7 +1044,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   onTap: () => _selectAll(_servingsController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: _onServingsChanged,
-                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
                   decoration: const InputDecoration(labelText: 'Servings Multiplier'),
                 ),
               ),
@@ -1055,7 +1055,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   onTap: () => _selectAll(_totalAmountController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: _onTotalAmountChanged,
-                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
                   decoration: InputDecoration(labelText: 'Total (${_selectedBaseUnit})'),
                 ),
               ),
@@ -1107,7 +1107,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               setState(() => _isManualCalories = v.isNotEmpty);
               _onManualNutrientTyped();
             },
-            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Calories (kcal)',
               suffixIcon: _isManualCalories
@@ -1118,7 +1118,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                         color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text('✎ manual', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child:  Text('✎ manual', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
                     )
                   : null,
               suffixIconConstraints: const BoxConstraints(minHeight: 24, minWidth: 24),
@@ -1139,10 +1139,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     color: AppColors.primary,
                     size: 20,
                   ),
-                  const SizedBox(width: 4),
+                   SizedBox(width: 4),
                   Text(
                     _isMicrosExpanded ? 'Hide Micronutrients' : 'Show Micronutrients',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                 ],
               ),
@@ -1189,7 +1189,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                 Expanded(
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: AppColors.border),
                       foregroundColor: AppColors.textMain,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1220,7 +1220,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       onTap: () => _selectAll(controller),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (_) => _onManualNutrientTyped(),
-      style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
+      style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: color.withValues(alpha: 0.9), fontWeight: FontWeight.w600, fontSize: 12),
@@ -1297,7 +1297,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       onTap: () => _selectAll(ctrl),
       onChanged: (_) => _onManualNutrientTyped(),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: const TextStyle(color: AppColors.textMain, fontSize: 13),
+      style: TextStyle(color: AppColors.textMain, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -1327,7 +1327,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         ),
         child: Text(
           DateFormat('MMM d').format(_selectedDate),
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
         ),
       ),
     );
@@ -1353,7 +1353,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         ),
         child: Text(
           _selectedTime.format(context),
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
         ),
       ),
     );

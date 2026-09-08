@@ -19,7 +19,7 @@ class RecipeNutritionSheet extends StatelessWidget {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -49,12 +49,12 @@ class RecipeNutritionSheet extends StatelessWidget {
                   ),
                   Text(
                     'Total Yield: ${totalGrams.round()}g',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
+                icon: Icon(Icons.close_rounded, color: AppColors.textMuted),
                 onPressed: () => Navigator.pop(context),
               ),
             ],

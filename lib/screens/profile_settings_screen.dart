@@ -264,7 +264,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(message, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -275,58 +275,174 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       ),
     );
   }
-
-  @override
+@override
   Widget build(BuildContext context) {
-    final user = _authService.currentUser;
-    final displayName = user?.displayName ?? (user?.email?.split('@').first ?? 'User');
-    final email = user?.email ?? '';
+    // ValueListenableBuilder forces ProfileSettingsScreen to repaint immediately on theme change
+    return ValueListenableBuilder<int>(
+      valueListenable: ThemeManager.notifier,
+      builder: (context, _, __) {
+        final user = _authService.currentUser;
+        final displayName = user?.displayName ?? (user?.email?.split('@').first ?? 'User');
+        final email = user?.email ?? '';
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile & Settings'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
-          physics: const BouncingScrollPhysics(),
-          children: [
-            // Island 1: User Account Card & Avatar
-            _buildAccountCard(displayName, email),
-            const SizedBox(height: 14),
-
-            // Island 2: Mifflin-St Jeor Goals Calculator
-            _buildGoalsCalculatorCard(),
-            const SizedBox(height: 14),
-
-            // Island 3: API Keys & Integration Settings
-            _buildIntegrationsCard(),
-            const SizedBox(height: 24),
-
-            // Sign Out Button
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.danger),
-                foregroundColor: AppColors.danger,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              icon: const Icon(Icons.logout_rounded, size: 20),
-              label: const Text('Sign Out of Account', style: TextStyle(fontWeight: FontWeight.w800)),
-              onPressed: () async {
-                final confirm = await _showSignOutDialog();
-                if (confirm == true && mounted) {
-                  Navigator.pop(context);
-                  await _authService.signOut();
-                }
-              },
+        return Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            title: const Text('Profile & Settings'),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+              onPressed: () => Navigator.pop(context),
             ),
-          ],
-        ),
+          ),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
+              physics: const BouncingScrollPhysics(),
+              children: [
+                _buildAccountCard(displayName, email),
+                const SizedBox(height: 14),
+                _buildAppearanceCard(),
+                const SizedBox(height: 14),
+                _buildGoalsCalculatorCard(),
+                const SizedBox(height: 14),
+                _buildIntegrationsCard(),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.danger),
+                    foregroundColor: AppColors.danger,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  icon: const Icon(Icons.logout_rounded, size: 20),
+                  label: const Text('Sign Out of Account', style: TextStyle(fontWeight: FontWeight.w800)),
+                  onPressed: () async {
+                    final confirm = await _showSignOutDialog();
+                    if (confirm == true && mounted) {
+                      Navigator.pop(context);
+                      await _authService.signOut();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAppearanceCard() {
+    final Map<String, Color> accents = {
+      'Emerald': const Color(0xFF10B981),
+      'Galaxy': const Color(0xFF3B82F6),
+      'Amethyst': const Color(0xFF8B5CF6),
+      'Sunset': const Color(0xFFF97316),
+      'Rose': const Color(0xFFF43F5E),
+    };
+
+    final Map<String, List<Color>> backgrounds = {
+      'AMOLED Black': [const Color(0xFF08080A), const Color(0xFF16161C)],
+      'Midnight Blue': [const Color(0xFF0A0F1C), const Color(0xFF151C2C)],
+      'Charcoal Grey': [const Color(0xFF121212), const Color(0xFF1E1E1E)],
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Appearance & Theme',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
+          ),
+          const SizedBox(height: 16),
+          
+          const Text(
+            'ACCENT COLOR',
+            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: accents.entries.map((entry) {
+              final isSelected = AppColors.primary.value == entry.value.value;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => ThemeManager.setAccent(entry.value),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: entry.value,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      width: isSelected ? 2.5 : 0,
+                    ),
+                    boxShadow: isSelected
+                        ? [BoxShadow(color: entry.value.withValues(alpha: 0.6), blurRadius: 10, spreadRadius: 2)]
+                        : [],
+                  ),
+                  child: isSelected ? const Icon(Icons.check_rounded, color: Colors.white, size: 20) : null,
+                ),
+              );
+            }).toList(),
+          ),
+          
+          const SizedBox(height: 20),
+          const Text(
+            'BACKGROUND STYLE',
+            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
+          ),
+          const SizedBox(height: 10),
+          Column(
+            children: backgrounds.entries.map((entry) {
+              final bgColors = entry.value;
+              final isSelected = AppColors.background.value == bgColors[0].value;
+              
+              return InkWell(
+                onTap: () => ThemeManager.setBackground(bgColors[0], bgColors[1]),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: bgColors[1],
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : AppColors.border,
+                      width: isSelected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(color: bgColors[0], shape: BoxShape.circle, border: Border.all(color: AppColors.border)),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(entry.key, style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14)),
+                        ],
+                      ),
+                      if (isSelected) Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -352,7 +468,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 child: _userPhotoUrl == null || _userPhotoUrl!.isEmpty
                     ? Text(
                         name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primary),
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primary),
                       )
                     : null,
               ),
@@ -375,7 +491,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             height: 12,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                        : Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
                   ),
                 ),
               ),
@@ -390,14 +506,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 6),
                 Container(
@@ -406,7 +522,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     color: AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
+                  child:  Text(
                     'Cloud Sync Active',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
                   ),
@@ -550,7 +666,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       'DAILY TARGETS',
                       style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
                     ),
-                    const Text(
+                     Text(
                       'Tap to manually adjust',
                       style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.primary),
                     ),
@@ -582,7 +698,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                               onTap: () => _selectAll(_targetCalController),
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.right,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w900,
                                 color: AppColors.primary,
@@ -703,7 +819,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -715,7 +831,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   onTap: () => _selectAll(controller),
                   onChanged: (_) => _performLiveCalculations(),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textMain),
                   decoration: const InputDecoration(
                     isDense: true, // Collapses the 48px boxy height
                     filled: false,  // Removes the dark inherited box
@@ -726,7 +842,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   ),
                 ),
               ),
-              Text(unit, style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+              Text(unit, style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -750,14 +866,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: value,
               isExpanded: true,
               dropdownColor: AppColors.surface,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 18),
-              style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13),
+              icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 18),
+              style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13),
               onChanged: onChanged,
               items: items,
             ),
@@ -781,7 +897,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           children: [
             Text(
               label.toUpperCase(),
-              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
+              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
             ),
             const SizedBox(height: 4),
             Row(
@@ -843,7 +959,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           TextField(
             controller: _usdaKeyController,
             obscureText: _obscureUsda,
-            style: const TextStyle(color: AppColors.textMain),
+            style: TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
               labelText: 'USDA API Access Key',
               suffixIcon: IconButton(
@@ -862,7 +978,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           TextField(
             controller: _geminiKeyController,
             obscureText: _obscureGemini,
-            style: const TextStyle(color: AppColors.textMain),
+            style: TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
               labelText: 'Gemini AI API Key',
               suffixIcon: IconButton(
@@ -905,7 +1021,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
         title: const Text('Sign Out', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
         content: const Text('Are you sure you want to sign out of your account?', style: TextStyle(color: AppColors.textMuted)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -915,7 +1031,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.border),
+                    side: BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

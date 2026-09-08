@@ -167,7 +167,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -195,7 +195,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
+                icon: Icon(Icons.close_rounded, color: AppColors.textMuted),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
@@ -222,14 +222,14 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                           border: Border.all(color: AppColors.border),
                         ),
                         alignment: Alignment.center,
-                        child: Text(_selectedEmoji, style: const TextStyle(fontSize: 26)),
+                        child: Text(_selectedEmoji, style: TextStyle(fontSize: 26)),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: _nameController,
-                        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
                         decoration: const InputDecoration(labelText: 'Food Name'),
                       ),
                     ),
@@ -246,7 +246,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                         controller: _servingGController,
                         onTap: () => _selectAll(_servingGController),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
                         decoration: const InputDecoration(labelText: 'Base Serving Size'),
                       ),
                     ),
@@ -266,8 +266,8 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                           child: DropdownButton<String>(
                             value: _selectedBaseUnit,
                             dropdownColor: AppColors.surface,
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
-                            style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
+                            style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
                             onChanged: (val) {
                               if (val != null) setState(() => _selectedBaseUnit = val);
                             },
@@ -286,7 +286,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                 TextField(
                   controller: _servingUnitController,
                   onTap: () => _selectAll(_servingUnitController),
-                  style: const TextStyle(color: AppColors.textMain),
+                  style: TextStyle(color: AppColors.textMain),
                   decoration: const InputDecoration(
                     labelText: 'Serving Unit Name (optional)',
                     hintText: 'e.g. slice, cup, portion',
@@ -321,7 +321,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   controller: _caloriesController,
                   onTap: () => _selectAll(_caloriesController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+                  style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
                   decoration: const InputDecoration(labelText: 'Calories (kcal)'),
                 ),
                 const SizedBox(height: 14),
@@ -342,7 +342,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                         const SizedBox(width: 4),
                         Text(
                           _isMicrosExpanded ? 'Hide Micronutrients' : 'Show Advanced Micronutrients',
-                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                         ),
                       ],
                     ),
@@ -431,7 +431,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       controller: controller,
       onTap: () => _selectAll(controller),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
+      style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: color.withValues(alpha: 0.9), fontWeight: FontWeight.w600, fontSize: 12),
@@ -445,7 +445,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       controller: ctrl,
       onTap: () => _selectAll(ctrl),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: const TextStyle(color: AppColors.textMain, fontSize: 13),
+      style: TextStyle(color: AppColors.textMain, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
