@@ -557,11 +557,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
 
     if (_editingLogId != null) {
-      await _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
+      _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
       HapticFeedback.mediumImpact();
       _showToast('Daily log updated!');
       widget.onLogCompleted();
     } else {
+      // Optimistic 0ms local write - never pauses UI
       final newLogId = await _firestoreService.addLog(logPayload);
       if (triggerAiEmoji) {
         _handleBackgroundAiEmoji(foodId, newLogId, displayName);

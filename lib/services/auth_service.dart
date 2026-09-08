@@ -24,7 +24,7 @@ class AuthService {
       email: email.trim(),
       password: password,
     );
-    await _syncUserRecord(credential.user);
+    _syncUserRecord(credential.user);
     if (credential.user != null) {
       FirestoreService().initializeListeners(credential.user!.uid);
     }
@@ -36,7 +36,7 @@ class AuthService {
       email: email.trim(),
       password: password,
     );
-    await _syncUserRecord(credential.user);
+    _syncUserRecord(credential.user);
     if (credential.user != null) {
       FirestoreService().initializeListeners(credential.user!.uid);
     }
@@ -52,7 +52,7 @@ class AuthService {
     );
 
     final userCredential = await _auth.signInWithCredential(credential);
-    await _syncUserRecord(userCredential.user);
+    _syncUserRecord(userCredential.user);
     if (userCredential.user != null) {
       FirestoreService().initializeListeners(userCredential.user!.uid);
     }
@@ -61,23 +61,27 @@ class AuthService {
 
   Future<void> signOut() async {
     FirestoreService().cancelListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('cached_user_photo');
     await GoogleSignIn.instance.signOut();
     await _auth.signOut();
   }
 
-  Future<void> _syncUserRecord(User? user) async {
+  // Non-blocking background sync with offline cache
+  void _syncUserRecord(User? user) async {
     if (user == null) return;
-    final userRef = _db.collection('users').doc(user.uid);
-    final userDoc = await userRef.get();
+    final prefs = await SharedPreferences.getInstance();
 
     String photo = user.photoURL ?? '';
-    if (userDoc.exists &&
-        userDoc.data()?['photoURL'] != null &&
-        userDoc.data()!['photoURL'].toString().isNotEmpty) {
-      photo = userDoc.data()!['photoURL'];
+    final cachedPhoto = prefs.getString('cached_user_photo');
+    if (photo.isEmpty && cachedPhoto != null) {
+      photo = cachedPhoto;
+    } else if (photo.isNotEmpty) {
+      await prefs.setString('cached_user_photo', photo);
     }
 
-    await userRef.set({
+    final userRef = _db.collection('users').doc(user.uid);
+    userRef.set({
       'uid': user.uid,
       'email': user.email ?? '',
       'displayName': user.displayName ?? (user.email?.split('@').first ?? 'User'),
@@ -85,18 +89,17 @@ class AuthService {
       'last_login': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
 
-    // Synchronize API Keys from Cloud
+    // Cache API Keys
     try {
       final settingsDoc = await _db
           .collection('users')
           .doc(user.uid)
           .collection('settings')
           .doc('config')
-          .get();
+          .get(const GetOptions(source: Source.serverAndCache));
 
       if (settingsDoc.exists && settingsDoc.data() != null) {
         final data = settingsDoc.data()!;
-        final prefs = await SharedPreferences.getInstance();
         if (data['usda_api_key'] != null) {
           await prefs.setString('usda_api_key', data['usda_api_key'].toString());
         }

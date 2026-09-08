@@ -15,7 +15,6 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // In-Memory Live Reactive Stores
   final ValueNotifier<List<DailyLog>> logsNotifier = ValueNotifier([]);
   final ValueNotifier<List<FoodItem>> foodsNotifier = ValueNotifier([]);
   final ValueNotifier<List<WeightLog>> weightLogsNotifier = ValueNotifier([]);
@@ -31,11 +30,10 @@ class FirestoreService {
     return uid;
   }
 
-  // --- Initialize Realtime Listeners on Auth ---
   void initializeListeners(String uid) {
     cancelListeners();
 
-    // 1. Stream all foods into memory
+    // 1. Stream all foods
     final foodSub = _db
         .collection('users')
         .doc(uid)
@@ -48,7 +46,7 @@ class FirestoreService {
     });
     _subscriptions.add(foodSub);
 
-    // 2. Stream all logs into memory (Single stream for zero-cost date switches)
+    // 2. Stream all logs
     final logSub = _db
         .collection('users')
         .doc(uid)
@@ -100,16 +98,10 @@ class FirestoreService {
     _subscriptions.clear();
   }
 
-  // --- Fast In-Memory Synchronous Query Helpers (0ms, 0 Network Calls) ---
+  // --- In-Memory Fast Filters (0ms) ---
 
   List<DailyLog> getLogsForDate(String date) {
     return logsNotifier.value.where((log) => log.date == date).toList();
-  }
-
-  List<DailyLog> getLogsForRange(String startDate, String endDate) {
-    return logsNotifier.value.where((log) {
-      return log.date.compareTo(startDate) >= 0 && log.date.compareTo(endDate) <= 0;
-    }).toList();
   }
 
   List<FoodItem> getFavoriteFoods() {
@@ -130,49 +122,50 @@ class FirestoreService {
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
 
-  // --- CRUD Operations ---
+  // --- Optimistic Local Writes (Never blocks UI thread offline) ---
 
   Future<String> addLog(DailyLog log) async {
     final ref = _db.collection('users').doc(_uid).collection('logs').doc();
-    await ref.set(log.toMap());
+    // Non-blocking write to local SQLite cache
+    ref.set(log.toMap());
     return ref.id;
   }
 
   Future<void> updateLog(String id, Map<String, dynamic> changes) async {
-    await _db.collection('users').doc(_uid).collection('logs').doc(id).update(changes);
+    _db.collection('users').doc(_uid).collection('logs').doc(id).update(changes);
   }
 
   Future<void> deleteLog(String id) async {
-    await _db.collection('users').doc(_uid).collection('logs').doc(id).delete();
+    _db.collection('users').doc(_uid).collection('logs').doc(id).delete();
   }
 
   Future<String> addFood(FoodItem food) async {
     final ref = _db.collection('users').doc(_uid).collection('foods').doc();
-    await ref.set(food.toMap());
+    ref.set(food.toMap());
     return ref.id;
   }
 
   Future<void> updateFood(String id, Map<String, dynamic> changes) async {
-    await _db.collection('users').doc(_uid).collection('foods').doc(id).update(changes);
+    _db.collection('users').doc(_uid).collection('foods').doc(id).update(changes);
   }
 
   Future<void> deleteFood(String id) async {
-    await _db.collection('users').doc(_uid).collection('foods').doc(id).delete();
+    _db.collection('users').doc(_uid).collection('foods').doc(id).delete();
   }
 
   Future<void> setWeightLog(WeightLog log) async {
-    await _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(
+    _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(
       log.toMap(),
       SetOptions(merge: true),
     );
   }
 
   Future<void> deleteWeightLog(String date) async {
-    await _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
+    _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
   }
 
   Future<void> saveProfile(UserProfile profile) async {
-    await _db.collection('users').doc(_uid).collection('profile').doc('1').set(
+    _db.collection('users').doc(_uid).collection('profile').doc('1').set(
       profile.toMap(),
       SetOptions(merge: true),
     );

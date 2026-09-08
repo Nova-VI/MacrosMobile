@@ -118,10 +118,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         stream: AuthService().authStateChanges,
                         builder: (context, snap) {
                           final photoUrl = snap.data?.photoURL;
+                          final name = snap.data?.displayName ?? snap.data?.email?.split('@').first ?? 'U';
+
                           if (photoUrl != null && photoUrl.isNotEmpty) {
-                            return CircleAvatar(
-                              radius: 17,
-                              backgroundImage: NetworkImage(photoUrl),
+                            return ClipOval(
+                              child: Image.network(
+                                photoUrl,
+                                width: 34,
+                                height: 34,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  // Offline fallback to initial
+                                  return Container(
+                                    color: AppColors.surface,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800),
+                                    ),
+                                  );
+                                },
+                              ),
                             );
                           }
                           return Icon(
