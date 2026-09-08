@@ -19,11 +19,11 @@ enum DayPhase {
 }
 
 class DashboardScreen extends StatefulWidget {
-  final VoidCallback onNavigateToLog;
+  final Function(DateTime date, {DailyLog? editLog}) onNavigateToLogWithDate;
 
   const DashboardScreen({
     super.key,
-    required this.onNavigateToLog,
+    required this.onNavigateToLogWithDate,
   });
 
   @override
@@ -190,10 +190,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                       return _DashboardDayView(
                         key: ValueKey(dateKey),
+                        pageDate: pageDate,
                         dayLogs: dayLogs,
                         profile: profile,
                         showRemainingNotifier: _showRemainingNotifier,
-                        onNavigateToLog: widget.onNavigateToLog,
+                        onNavigateToLogWithDate: widget.onNavigateToLogWithDate,
                       );
                     },
                   ),
@@ -208,17 +209,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class _DashboardDayView extends StatefulWidget {
+  final DateTime pageDate;
   final List<DailyLog> dayLogs;
   final UserProfile profile;
   final ValueNotifier<bool> showRemainingNotifier;
-  final VoidCallback onNavigateToLog;
+  final Function(DateTime date, {DailyLog? editLog}) onNavigateToLogWithDate;
 
   const _DashboardDayView({
     super.key,
+    required this.pageDate,
     required this.dayLogs,
     required this.profile,
     required this.showRemainingNotifier,
-    required this.onNavigateToLog,
+    required this.onNavigateToLogWithDate,
   });
 
   @override
@@ -554,7 +557,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           ],
         ),
         TextButton.icon(
-          onPressed: widget.onNavigateToLog,
+          onPressed: () => widget.onNavigateToLogWithDate(widget.pageDate),
           style: TextButton.styleFrom(
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -627,14 +630,34 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
 
     return Dismissible(
       key: Key(log.id),
-      direction: DismissDirection.endToStart,
+      direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async {
-        return await _showDeleteConfirmation(log);
+        if (direction == DismissDirection.startToEnd) {
+          // Swipe Right -> Trigger Edit Mode with Target Date
+          HapticFeedback.mediumImpact();
+          widget.onNavigateToLogWithDate(widget.pageDate, editLog: log);
+          return false;
+        } else {
+          // Swipe Left -> Trigger Delete
+          return await _showDeleteConfirmation(log);
+        }
       },
       onDismissed: (direction) {
-        FirestoreService().deleteLog(log.id);
+        if (direction == DismissDirection.endToStart) {
+          FirestoreService().deleteLog(log.id);
+        }
       },
       background: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(left: 18),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerLeft,
+        child: const Icon(Icons.edit_rounded, color: Colors.white, size: 22),
+      ),
+      secondaryBackground: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.only(right: 18),
         decoration: BoxDecoration(
@@ -707,22 +730,38 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
-                      splashRadius: 18,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                      onPressed: () async {
-                        final confirm = await _showDeleteConfirmation(log);
-                        if (confirm == true) {
-                          await FirestoreService().deleteLog(log.id);
-                        }
-                      },
-                      tooltip: 'Delete Log',
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
+                          splashRadius: 18,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                          onPressed: () => widget.onNavigateToLogWithDate(widget.pageDate, editLog: log),
+                          tooltip: 'Edit Log',
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
+                          splashRadius: 18,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                          onPressed: () async {
+                            final confirm = await _showDeleteConfirmation(log);
+                            if (confirm == true) {
+                              await FirestoreService().deleteLog(log.id);
+                            }
+                          },
+                          tooltip: 'Delete Log',
+                        ),
+                      ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
+
+                // Compact Metric Capsules
                 Row(
                   children: [
                     _buildCompactCapsule('Calories', '${log.macros.calories.round()}', color: AppColors.primary),
@@ -734,33 +773,31 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                     _buildCompactCapsule('Fat', '${log.macros.fatG.toStringAsFixed(1)}g', color: AppColors.warning),
                   ],
                 ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  child: isExpanded
-                      ? Container(
-                          margin: const EdgeInsets.only(top: 10),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border.withValues(alpha: 0.4)),
-                          ),
-                          child: Wrap(
-                            spacing: 14,
-                            runSpacing: 6,
-                            children: [
-                              _buildMicroItem('Fiber', '${log.micros.fiberG.toStringAsFixed(1)}g'),
-                              _buildMicroItem('Sugar', '${log.micros.sugarG.toStringAsFixed(1)}g'),
-                              _buildMicroItem('Sodium', '${log.micros.sodiumMg.round()}mg'),
-                              _buildMicroItem('Sat Fat', '${log.micros.saturatedFatG.toStringAsFixed(1)}g'),
-                              _buildMicroItem('Cholesterol', '${log.micros.cholesterolMg.round()}mg'),
-                              _buildMicroItem('Potassium', '${log.micros.potassiumMg.round()}mg'),
-                            ],
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
+
+                // Micronutrient Drawer
+                if (isExpanded) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border.withValues(alpha: 0.4)),
+                    ),
+                    child: Wrap(
+                      spacing: 14,
+                      runSpacing: 6,
+                      children: [
+                        _buildMicroItem('Fiber', '${log.micros.fiberG.toStringAsFixed(1)}g'),
+                        _buildMicroItem('Sugar', '${log.micros.sugarG.toStringAsFixed(1)}g'),
+                        _buildMicroItem('Sodium', '${log.micros.sodiumMg.round()}mg'),
+                        _buildMicroItem('Sat Fat', '${log.micros.saturatedFatG.toStringAsFixed(1)}g'),
+                        _buildMicroItem('Cholesterol', '${log.micros.cholesterolMg.round()}mg'),
+                        _buildMicroItem('Potassium', '${log.micros.potassiumMg.round()}mg'),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -846,7 +883,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           ),
           const SizedBox(height: 14),
           ElevatedButton.icon(
-            onPressed: widget.onNavigateToLog,
+            onPressed: () => widget.onNavigateToLogWithDate(widget.pageDate),
             icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Log Food Now'),
             style: ElevatedButton.styleFrom(

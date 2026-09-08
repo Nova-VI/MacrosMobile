@@ -103,9 +103,8 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // App Icon & Brand
                   const Icon(
-                    Icons.restaurant_menu,
+                    Icons.restaurant_menu_rounded,
                     size: 56,
                     color: AppColors.primary,
                   ),
@@ -131,7 +130,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Google Sign In Button
+                  // Google Sign-In
                   OutlinedButton(
                     onPressed: _isLoading ? null : _submitGoogleAuth,
                     style: OutlinedButton.styleFrom(
@@ -139,20 +138,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       side: const BorderSide(color: AppColors.border),
                       backgroundColor: AppColors.surface,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.g_mobiledata, size: 28, color: Colors.white),
+                        Icon(Icons.g_mobiledata_rounded, size: 28, color: Colors.white),
                         SizedBox(width: 8),
                         Text(
                           'Continue with Google',
                           style: TextStyle(
                             color: AppColors.textMain,
                             fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -212,21 +211,21 @@ class _AuthScreenState extends State<AuthScreen> {
                   // Error Display
                   if (_errorMessage != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
                         color: AppColors.danger.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         _errorMessage!,
-                        style: const TextStyle(color: AppColors.danger, fontSize: 13),
+                        style: const TextStyle(color: AppColors.danger, fontSize: 13, fontWeight: FontWeight.w600),
                         textAlign: TextAlign.center,
                       ),
                     ),
 
-                  // Primary Submit Button
+                  // Primary Button
                   ElevatedButton(
                     onPressed: _isLoading ? null : _submitEmailAuth,
                     child: _isLoading
@@ -239,7 +238,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Switch between Sign In / Sign Up
+                  // Toggle Sign In / Sign Up
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

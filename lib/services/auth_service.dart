@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firestore_service.dart';
 
 class AuthService {
@@ -15,9 +16,7 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
 
   Future<void> initialize() async {
-    await GoogleSignIn.instance.initialize(
-      serverClientId: '589280308784-n1lb9srt8u6cqobvj5nvgsrjer4nmi3g.apps.googleusercontent.com',
-    );
+    await GoogleSignIn.instance.initialize();
   }
 
   Future<UserCredential> signInWithEmail(String email, String password) async {
@@ -85,5 +84,29 @@ class AuthService {
       'photoURL': photo,
       'last_login': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
+
+    // Synchronize API Keys from Cloud
+    try {
+      final settingsDoc = await _db
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('config')
+          .get();
+
+      if (settingsDoc.exists && settingsDoc.data() != null) {
+        final data = settingsDoc.data()!;
+        final prefs = await SharedPreferences.getInstance();
+        if (data['usda_api_key'] != null) {
+          await prefs.setString('usda_api_key', data['usda_api_key'].toString());
+        }
+        if (data['gemini_api_key'] != null) {
+          await prefs.setString('gemini_api_key', data['gemini_api_key'].toString());
+        }
+        if (data['usda_include_branded'] != null) {
+          await prefs.setBool('usda_include_branded', data['usda_include_branded'] == true);
+        }
+      }
+    } catch (_) {}
   }
 }

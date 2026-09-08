@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../models/daily_log.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
+import 'log_food_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -10,21 +12,50 @@ class MainNavigationScreen extends StatefulWidget {
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
+
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  DateTime _targetLogDate = DateTime.now();
+  DailyLog? _editingLog;
 
   void _onTabSelected(int index) {
     if (_currentIndex != index) {
       HapticFeedback.lightImpact();
-      setState(() => _currentIndex = index);
+      setState(() {
+        _currentIndex = index;
+        if (index != 1) {
+          _editingLog = null; // Clear edit state when leaving log tab
+        }
+      });
     }
+  }
+
+  void _openLogScreen(DateTime date, {DailyLog? editLog}) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _targetLogDate = date;
+      _editingLog = editLog;
+      _currentIndex = 1; // Switch to Log tab
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      DashboardScreen(onNavigateToLog: () => _onTabSelected(1)),
-      const Center(child: Text('Log Food (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+      DashboardScreen(
+        onNavigateToLogWithDate: (date, {editLog}) => _openLogScreen(date, editLog: editLog),
+      ),
+      LogFoodScreen(
+        key: ValueKey('log_food_${_targetLogDate.toIso8601String()}_${_editingLog?.id ?? 'new'}'),
+        initialDate: _targetLogDate,
+        editLog: _editingLog,
+        onLogCompleted: () {
+          setState(() {
+            _editingLog = null;
+            _currentIndex = 0; // Return to Home on log complete
+          });
+        },
+      ),
       const Center(child: Text('Recipes (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
       const Center(child: Text('Weight Tracker (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
       const Center(child: Text('Stats & Insights (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
@@ -44,7 +75,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         bottom: false,
         child: Column(
           children: [
-            // Top App Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
@@ -83,7 +113,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
       ),
-      // Floating Pill Navigation Bar
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
         decoration: BoxDecoration(
@@ -167,22 +196,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: AppColors.border),
         ),
-        title: const Text(
-          'Sign Out',
-          style: TextStyle(
-            color: AppColors.textMain,
-            fontWeight: FontWeight.w800,
-            fontSize: 20,
-          ),
-        ),
-        content: const Text(
-          'Are you sure you want to sign out of your account?',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 14),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        title: const Text('Sign Out', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
+        content: const Text('Are you sure you want to sign out of your account?', style: TextStyle(color: AppColors.textMuted)),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
             children: [
@@ -191,22 +210,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => Navigator.pop(ctx, false),
                   child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.danger,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => Navigator.pop(ctx, true),
                   child: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w700)),

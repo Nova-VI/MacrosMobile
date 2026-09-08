@@ -14,7 +14,7 @@ void main() async {
   await Firebase.initializeApp();
   await AuthService().initialize();
 
-  // Enable Native Firestore Persistence
+  // Enable Native Firestore Persistence Cache
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
