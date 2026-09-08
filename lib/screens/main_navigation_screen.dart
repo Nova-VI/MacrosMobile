@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
 import 'log_food_screen.dart';
+import 'recipes_library_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -24,7 +25,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       setState(() {
         _currentIndex = index;
         if (index != 1) {
-          _editingLog = null; // Clear edit state when leaving log tab
+          _editingLog = null;
         }
       });
     }
@@ -52,11 +53,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onLogCompleted: () {
           setState(() {
             _editingLog = null;
-            _currentIndex = 0; // Return to Home on log complete
+            _currentIndex = 0;
           });
         },
       ),
-      const Center(child: Text('Recipes (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+      const RecipesLibraryScreen(), // Tab 3: Unified Foods & Recipe Hub
       const Center(child: Text('Weight Tracker (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
       const Center(child: Text('Stats & Insights (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
     ];
@@ -64,7 +65,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final List<String> titles = const [
       'MacroTracker',
       'Log Food',
-      'Recipe Composer',
+      'Foods & Recipes',
       'Weight Tracker',
       'Stats & Insights',
     ];
@@ -169,7 +170,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 NavigationDestination(
                   icon: Icon(Icons.restaurant_menu_rounded, size: 22),
                   selectedIcon: Icon(Icons.restaurant_rounded, color: AppColors.primary, size: 22),
-                  label: 'Recipes',
+                  label: 'Foods',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.monitor_weight_outlined, size: 22),
