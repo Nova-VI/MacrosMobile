@@ -18,6 +18,41 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   DateTime _targetLogDate = DateTime.now();
   DailyLog? _editingLog;
+  
+  Widget _buildCircularNavItem({
+    required int index,
+    required IconData icon,
+    required IconData selectedIcon,
+    required String tooltip,
+  }) {
+    final isSelected = _currentIndex == index;
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: () => _onTabSelected(index),
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle, // Pure geometric circle
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: 0.18)
+                : Colors.transparent,
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            isSelected ? selectedIcon : icon,
+            color: isSelected ? AppColors.primary : AppColors.textMuted,
+            size: 23,
+          ),
+        ),
+      ),
+    );
+  }
 
   void _onTabSelected(int index) {
     if (_currentIndex != index) {
@@ -114,77 +149,57 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
       ),
+      // Minimalist Floating Icon-Only Navigation Bar
+// Floating Minimalist Navigation Bar with True Circular Indicator
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        height: 64,
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(32),
           border: Border.all(color: AppColors.border, width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.45),
+              color: Colors.black.withValues(alpha: 0.5),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: NavigationBarTheme(
-            data: NavigationBarThemeData(
-              backgroundColor: Colors.transparent,
-              indicatorColor: AppColors.primary.withValues(alpha: 0.18),
-              indicatorShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>(
-                (states) => TextStyle(
-                  fontSize: 12,
-                  fontWeight: states.contains(WidgetState.selected)
-                      ? FontWeight.w700
-                      : FontWeight.w500,
-                  color: states.contains(WidgetState.selected)
-                      ? AppColors.primary
-                      : AppColors.textMuted,
-                ),
-              ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildCircularNavItem(
+              index: 0,
+              icon: Icons.home_outlined,
+              selectedIcon: Icons.home_rounded,
+              tooltip: 'Home',
             ),
-            child: NavigationBar(
-              height: 72,
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              selectedIndex: _currentIndex,
-              onDestinationSelected: _onTabSelected,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined, size: 22),
-                  selectedIcon: Icon(Icons.home_rounded, color: AppColors.primary, size: 22),
-                  label: 'Home',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.add_circle_outline_rounded, size: 22),
-                  selectedIcon: Icon(Icons.add_circle_rounded, color: AppColors.primary, size: 22),
-                  label: 'Log',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.restaurant_menu_rounded, size: 22),
-                  selectedIcon: Icon(Icons.restaurant_rounded, color: AppColors.primary, size: 22),
-                  label: 'Foods',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.monitor_weight_outlined, size: 22),
-                  selectedIcon: Icon(Icons.monitor_weight_rounded, color: AppColors.primary, size: 22),
-                  label: 'Weight',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.insights_rounded, size: 22),
-                  selectedIcon: Icon(Icons.analytics_rounded, color: AppColors.primary, size: 22),
-                  label: 'Stats',
-                ),
-              ],
+            _buildCircularNavItem(
+              index: 1,
+              icon: Icons.add_circle_outline_rounded,
+              selectedIcon: Icons.add_circle_rounded,
+              tooltip: 'Log Food',
             ),
-          ),
+            _buildCircularNavItem(
+              index: 2,
+              icon: Icons.restaurant_menu_rounded,
+              selectedIcon: Icons.restaurant_rounded,
+              tooltip: 'Foods & Recipes',
+            ),
+            _buildCircularNavItem(
+              index: 3,
+              icon: Icons.monitor_weight_outlined,
+              selectedIcon: Icons.monitor_weight_rounded,
+              tooltip: 'Weight Tracker',
+            ),
+            _buildCircularNavItem(
+              index: 4,
+              icon: Icons.insights_rounded,
+              selectedIcon: Icons.analytics_rounded,
+              tooltip: 'Stats & Insights',
+            ),
+          ],
         ),
       ),
     );
