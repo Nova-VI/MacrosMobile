@@ -1,0 +1,68 @@
+class UserProfile {
+  final String id;
+  final String goalMode;
+  final double targetCalories;
+  final double targetProteinG;
+  final double targetCarbsG;
+  final double targetFatG;
+  final int age;
+  final String gender;
+  final double height;
+  final double weight;
+  final String activity;
+  final String goal;
+  final String proteinMultiplier;
+
+  UserProfile({
+    this.id = '1',
+    this.goalMode = 'calculator',
+    this.targetCalories = 2000.0,
+    this.targetProteinG = 150.0,
+    this.targetCarbsG = 200.0,
+    this.targetFatG = 65.0,
+    this.age = 25,
+    this.gender = 'male',
+    this.height = 175.0,
+    this.weight = 70.0,
+    this.activity = '1.2',
+    this.goal = '0',
+    this.proteinMultiplier = '2.0',
+  });
+
+  factory UserProfile.fromFirestore(Map<String, dynamic>? data) {
+    if (data == null) return UserProfile();
+    return UserProfile(
+      id: data['id']?.toString() ?? '1',
+      goalMode: data['goal_mode'] ?? 'calculator',
+      targetCalories: (data['target_calories'] as num?)?.toDouble() ?? 2000.0,
+      targetProteinG: (data['target_protein_g'] as num?)?.toDouble() ?? 150.0,
+      targetCarbsG: (data['target_carbs_g'] as num?)?.toDouble() ?? 200.0,
+      targetFatG: (data['target_fat_g'] as num?)?.toDouble() ?? 65.0,
+      age: (data['age'] as num?)?.toInt() ?? 25,
+      gender: data['gender'] ?? 'male',
+      height: (data['height'] as num?)?.toDouble() ?? 175.0,
+      weight: (data['weight'] as num?)?.toDouble() ?? 70.0,
+      activity: data['activity']?.toString() ?? '1.2',
+      goal: data['goal']?.toString() ?? '0',
+      proteinMultiplier: data['protein_multiplier']?.toString() ?? '2.0',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': 1,
+      'goal_mode': goalMode,
+      'target_calories': targetCalories,
+      'target_protein_g': targetProteinG,
+      'target_carbs_g': targetCarbsG,
+      'target_fat_g': targetFatG,
+      'age': age,
+      'gender': gender,
+      'height': height,
+      'weight': weight,
+      'activity': activity,
+      'goal': goal,
+      'protein_multiplier': proteinMultiplier,
+    };
+  }
+}
