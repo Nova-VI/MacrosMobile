@@ -7,6 +7,7 @@ import 'dashboard_screen.dart';
 import 'log_food_screen.dart';
 import 'recipes_library_screen.dart';
 import 'weight_tracker_screen.dart';
+import 'stats_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -95,7 +96,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
       const RecipesLibraryScreen(), // Tab 3: Unified Foods & Recipe Hub
       const WeightTrackerScreen(), // Tab 4: Weight Tracker
-      const Center(child: Text('Stats & Insights (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+      const StatsScreen(), // Tab 5: Stats & Insights
     ];
 
     final List<String> titles = const [

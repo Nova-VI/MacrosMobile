@@ -5,7 +5,6 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/weight_log.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
-import 'weight_tracker_screen.dart';
 
 class WeightTrackerScreen extends StatefulWidget {
   const WeightTrackerScreen({super.key});

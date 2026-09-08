@@ -66,3 +66,24 @@ class UserProfile {
     };
   }
 }
+enum GoalType { cut, maintain, bulk }
+
+extension UserProfileGoalExtension on UserProfile {
+  GoalType get goalType {
+    final val = double.tryParse(goal) ?? 0.0;
+    if (val < -50) return GoalType.cut;
+    if (val > 50) return GoalType.bulk;
+    return GoalType.maintain;
+  }
+
+  String get goalTypeLabel {
+    switch (goalType) {
+      case GoalType.cut:
+        return 'Weight Loss (Cut)';
+      case GoalType.bulk:
+        return 'Weight Gain (Bulk)';
+      case GoalType.maintain:
+        return 'Maintenance';
+    }
+  }
+}
