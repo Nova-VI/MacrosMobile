@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/daily_log.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -8,6 +9,7 @@ import 'log_food_screen.dart';
 import 'recipes_library_screen.dart';
 import 'weight_tracker_screen.dart';
 import 'stats_screen.dart';
+import 'profile_settings_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -20,41 +22,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   DateTime _targetLogDate = DateTime.now();
   DailyLog? _editingLog;
-  
-  Widget _buildCircularNavItem({
-    required int index,
-    required IconData icon,
-    required IconData selectedIcon,
-    required String tooltip,
-  }) {
-    final isSelected = _currentIndex == index;
-
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: () => _onTabSelected(index),
-        borderRadius: BorderRadius.circular(24),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle, // Pure geometric circle
-            color: isSelected
-                ? AppColors.primary.withValues(alpha: 0.18)
-                : Colors.transparent,
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            isSelected ? selectedIcon : icon,
-            color: isSelected ? AppColors.primary : AppColors.textMuted,
-            size: 23,
-          ),
-        ),
-      ),
-    );
-  }
 
   void _onTabSelected(int index) {
     if (_currentIndex != index) {
@@ -62,7 +29,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       setState(() {
         _currentIndex = index;
         if (index != 1) {
-          _editingLog = null;
+          _editingLog = null; // Reset edit mode when leaving the log tab
         }
       });
     }
@@ -90,13 +57,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onLogCompleted: () {
           setState(() {
             _editingLog = null;
-            _currentIndex = 0;
+            _currentIndex = 0; // Return to Home on complete
           });
         },
       ),
-      const RecipesLibraryScreen(), // Tab 3: Unified Foods & Recipe Hub
-      const WeightTrackerScreen(), // Tab 4: Weight Tracker
-      const StatsScreen(), // Tab 5: Stats & Insights
+      const RecipesLibraryScreen(),
+      const WeightTrackerScreen(),
+      const StatsScreen(),
     ];
 
     final List<String> titles = const [
@@ -113,6 +80,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         bottom: false,
         child: Column(
           children: [
+            // Top App Bar
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
@@ -127,16 +95,42 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       letterSpacing: -0.6,
                     ),
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.logout_rounded, size: 20, color: AppColors.textMuted),
-                      tooltip: 'Sign Out',
-                      onPressed: () => _showSignOutDialog(context),
+                  // User Avatar & Profile Access
+                  InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      alignment: Alignment.center,
+                      child: StreamBuilder<User?>(
+                        stream: AuthService().authStateChanges,
+                        builder: (context, snap) {
+                          final photoUrl = snap.data?.photoURL;
+                          if (photoUrl != null && photoUrl.isNotEmpty) {
+                            return CircleAvatar(
+                              radius: 17,
+                              backgroundImage: NetworkImage(photoUrl),
+                            );
+                          }
+                          return const Icon(
+                            Icons.person_rounded,
+                            size: 20,
+                            color: AppColors.primary,
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],
@@ -151,8 +145,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
       ),
-      // Minimalist Floating Icon-Only Navigation Bar
-// Floating Minimalist Navigation Bar with True Circular Indicator
+      // Floating Minimalist Navigation Bar with True Circular Indicators
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         height: 64,
@@ -207,56 +200,38 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  void _showSignOutDialog(BuildContext context) async {
-    HapticFeedback.mediumImpact();
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: const Text('Sign Out', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: const Text('Are you sure you want to sign out of your account?', style: TextStyle(color: AppColors.textMuted)),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.border),
-                    foregroundColor: AppColors.textMain,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.danger,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
+  Widget _buildCircularNavItem({
+    required int index,
+    required IconData icon,
+    required IconData selectedIcon,
+    required String tooltip,
+  }) {
+    final isSelected = _currentIndex == index;
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: () => _onTabSelected(index),
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: 0.18)
+                : Colors.transparent,
           ),
-        ],
+          alignment: Alignment.center,
+          child: Icon(
+            isSelected ? selectedIcon : icon,
+            color: isSelected ? AppColors.primary : AppColors.textMuted,
+            size: 23,
+          ),
+        ),
       ),
     );
-
-    if (confirm == true) {
-      await AuthService().signOut();
-    }
   }
 }
