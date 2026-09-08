@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "589280308784",
+    "project_id": "macro-c885f",
+    "storage_bucket": "macro-c885f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:589280308784:android:1a994e30a1f21ba88ac7f5",
+        "android_client_info": {
+          "package_name": "com.macrotracker.macro_tracker_mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "589280308784-n1lb9srt8u6cqobvj5nvgsrjer4nmi3g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4DvhfMEzeOepaanlMPqlYb-fZwFs0RFI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "589280308784-n1lb9srt8u6cqobvj5nvgsrjer4nmi3g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
