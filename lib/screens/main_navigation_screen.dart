@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import 'dashboard_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -9,25 +10,8 @@ class MainNavigationScreen extends StatefulWidget {
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
-
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
-
-  final List<Widget> _pages = const [
-    Center(child: Text('Dashboard', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
-    Center(child: Text('Log Food', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
-    Center(child: Text('Recipes', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
-    Center(child: Text('Weight Tracker', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
-    Center(child: Text('Stats & Insights', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
-  ];
-
-  final List<String> _titles = const [
-    'Dashboard',
-    'Log Food',
-    'Recipe Composer',
-    'Weight Tracker',
-    'Stats & Insights',
-  ];
 
   void _onTabSelected(int index) {
     if (_currentIndex != index) {
@@ -38,6 +22,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      DashboardScreen(onNavigateToLog: () => _onTabSelected(1)),
+      const Center(child: Text('Log Food (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+      const Center(child: Text('Recipes (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+      const Center(child: Text('Weight Tracker (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+      const Center(child: Text('Stats & Insights (Next Step)', style: TextStyle(color: AppColors.textMuted, fontSize: 16))),
+    ];
+
+    final List<String> titles = const [
+      'MacroTracker',
+      'Log Food',
+      'Recipe Composer',
+      'Weight Tracker',
+      'Stats & Insights',
+    ];
+
     return Scaffold(
       extendBody: true,
       body: SafeArea(
@@ -51,7 +51,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _titles[_currentIndex],
+                    titles[_currentIndex],
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
@@ -77,13 +77,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             Expanded(
               child: IndexedStack(
                 index: _currentIndex,
-                children: _pages,
+                children: pages,
               ),
             ),
           ],
         ),
       ),
-      // Floating Navigation Bar
+      // Floating Pill Navigation Bar
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
         decoration: BoxDecoration(
@@ -192,9 +192,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: () => Navigator.pop(ctx, false),
                   child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -208,9 +206,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: () => Navigator.pop(ctx, true),
                   child: const Text('Sign Out', style: TextStyle(fontWeight: FontWeight.w700)),
