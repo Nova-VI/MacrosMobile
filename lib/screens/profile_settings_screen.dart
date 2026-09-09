@@ -12,6 +12,7 @@ import '../models/weight_log.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/api_key_guide_sheet.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -90,7 +91,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       });
     }
 
-    // Load Profile from In-Memory Firestore Service
     final p = _firestoreService.profileNotifier.value;
     setState(() {
       _calcMethod = p.goalMode;
@@ -108,7 +108,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       _targetFatController.text = p.targetFatG.round().toString();
     });
 
-    // Load API Keys from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _usdaKeyController.text = prefs.getString('usda_api_key') ?? '';
@@ -119,7 +118,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _performLiveCalculations();
   }
 
-  // Exact Mifflin-St Jeor Formula
   void _performLiveCalculations() {
     if (_calcMethod != 'calculator') return;
 
@@ -156,7 +154,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     });
   }
 
-  // Cloudinary Direct Custom Avatar Upload
   Future<void> _pickAndUploadAvatar() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -177,7 +174,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         final data = json.decode(resBody);
         final secureUrl = data['secure_url'] as String;
 
-        // 1. Update Firebase Auth Profile
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await user.updatePhotoURL(secureUrl);
@@ -221,7 +217,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
     await _firestoreService.saveProfile(payload);
 
-    // If using calculator and weight is set, ensure an entry exists for today
     if (_calcMethod == 'calculator') {
       final w = double.tryParse(_weightController.text) ?? 0.0;
       final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -246,7 +241,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     await prefs.setString('gemini_api_key', geminiKey);
     await prefs.setBool('usda_include_branded', _includeBranded);
 
-    // Sync to Cloud Firestore config
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
@@ -264,7 +258,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -275,9 +269,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       ),
     );
   }
-@override
+
+  @override
   Widget build(BuildContext context) {
-    // ValueListenableBuilder forces ProfileSettingsScreen to repaint immediately on theme change
     return ValueListenableBuilder<int>(
       valueListenable: ThemeManager.notifier,
       builder: (context, _, __) {
@@ -362,7 +356,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
           ),
           const SizedBox(height: 16),
-          
           const Text(
             'ACCENT COLOR',
             style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
@@ -395,7 +388,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               );
             }).toList(),
           ),
-          
           const SizedBox(height: 20),
           const Text(
             'BACKGROUND STYLE',
@@ -406,7 +398,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             children: backgrounds.entries.map((entry) {
               final bgColors = entry.value;
               final isSelected = AppColors.background.value == bgColors[0].value;
-              
+
               return InkWell(
                 onTap: () => ThemeManager.setBackground(bgColors[0], bgColors[1]),
                 borderRadius: BorderRadius.circular(14),
@@ -491,7 +483,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             height: 12,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                        : const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
                   ),
                 ),
               ),
@@ -506,14 +498,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 6),
                 Container(
@@ -522,7 +514,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     color: AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child:  Text(
+                  child: Text(
                     'Cloud Sync Active',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
                   ),
@@ -535,7 +527,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
- Widget _buildGoalsCalculatorCard() {
+  Widget _buildGoalsCalculatorCard() {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -556,8 +548,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 16),
-
-          // Gender 2-Way Pill Switcher
           Row(
             children: [
               Expanded(
@@ -570,8 +560,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // 3-Column Biometrics Row (Age, Height, Weight)
           Row(
             children: [
               Expanded(
@@ -588,8 +576,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
-          // Activity Level Selector Tile
           _buildSelectorTile(
             label: 'Activity Level',
             value: _activityLevel,
@@ -608,8 +594,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             },
           ),
           const SizedBox(height: 10),
-
-          // Weekly Goal Preset Selector Tile
           _buildSelectorTile(
             label: 'Weekly Goal Preset',
             value: _weeklyGoal,
@@ -628,8 +612,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             },
           ),
           const SizedBox(height: 10),
-
-          // Protein Preference Selector Tile
           _buildSelectorTile(
             label: 'Protein Target Preference',
             value: _proteinMultiplier,
@@ -647,8 +629,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             },
           ),
           const SizedBox(height: 16),
-
-          // Hero Computed Targets Display (Tappable & Editable)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -666,15 +646,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       'DAILY TARGETS',
                       style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
                     ),
-                     Text(
+                    Text(
                       'Tap to manually adjust',
                       style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.primary),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // Main Calorie Target Hero Input
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
@@ -691,7 +669,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       ),
                       Row(
                         children: [
-                         SizedBox(
+                          SizedBox(
                             width: 70,
                             child: TextField(
                               controller: _targetCalController,
@@ -721,8 +699,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-
-                // 3 Colorful Macro Capsules (Protein, Carbs, Fat)
                 Row(
                   children: [
                     _buildTargetMacroCapsule('Protein', _targetProController, AppColors.protein),
@@ -732,7 +708,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     _buildTargetMacroCapsule('Fat', _targetFatController, AppColors.fat),
                   ],
                 ),
-
                 if (_showExtremeWarning) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -760,7 +735,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-
           ElevatedButton(
             onPressed: _saveProfileAndGoals,
             child: const Text('Save Target Goals'),
@@ -807,7 +781,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
- Widget _buildBiometricInput(String label, TextEditingController controller, String unit) {
+  Widget _buildBiometricInput(String label, TextEditingController controller, String unit) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -819,7 +793,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -831,10 +805,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   onTap: () => _selectAll(controller),
                   onChanged: (_) => _performLiveCalculations(),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textMain),
                   decoration: const InputDecoration(
-                    isDense: true, // Collapses the 48px boxy height
-                    filled: false,  // Removes the dark inherited box
+                    isDense: true,
+                    filled: false,
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
                     focusedBorder: InputBorder.none,
@@ -842,7 +816,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   ),
                 ),
               ),
-              Text(unit, style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+              Text(unit, style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -866,14 +840,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: value,
               isExpanded: true,
               dropdownColor: AppColors.surface,
-              icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 18),
-              style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 18),
+              style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13),
               onChanged: onChanged,
               items: items,
             ),
@@ -883,7 +857,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
- Widget _buildTargetMacroCapsule(String label, TextEditingController controller, Color color) {
+  Widget _buildTargetMacroCapsule(String label, TextEditingController controller, Color color) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
@@ -897,7 +871,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           children: [
             Text(
               label.toUpperCase(),
-              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
             ),
             const SizedBox(height: 4),
             Row(
@@ -905,7 +879,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                // Replaced IntrinsicWidth with fixed SizedBox for instant 0ms layout
                 SizedBox(
                   width: 38,
                   child: TextField(
@@ -949,26 +922,63 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'API Keys & Database',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'API Keys & Database',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
+              ),
+              InkWell(
+                onTap: () => ApiKeyGuideSheet.show(context),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline_rounded, size: 14, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Setup Guide',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           // USDA API Key
           TextField(
             controller: _usdaKeyController,
             obscureText: _obscureUsda,
-            style: TextStyle(color: AppColors.textMain),
+            style: const TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
               labelText: 'USDA API Access Key',
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureUsda ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  color: AppColors.textMuted,
-                  size: 20,
-                ),
-                onPressed: () => setState(() => _obscureUsda = !_obscureUsda),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.help_outline_rounded, color: AppColors.textMuted, size: 18),
+                    onPressed: () => ApiKeyGuideSheet.show(context, initialService: ApiKeyType.usda),
+                    tooltip: 'How to get USDA key?',
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _obscureUsda ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      color: AppColors.textMuted,
+                      size: 20,
+                    ),
+                    onPressed: () => setState(() => _obscureUsda = !_obscureUsda),
+                  ),
+                ],
               ),
             ),
           ),
@@ -978,16 +988,26 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           TextField(
             controller: _geminiKeyController,
             obscureText: _obscureGemini,
-            style: TextStyle(color: AppColors.textMain),
+            style: const TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
               labelText: 'Gemini AI API Key',
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureGemini ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  color: AppColors.textMuted,
-                  size: 20,
-                ),
-                onPressed: () => setState(() => _obscureGemini = !_obscureGemini),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.help_outline_rounded, color: AppColors.textMuted, size: 18),
+                    onPressed: () => ApiKeyGuideSheet.show(context, initialService: ApiKeyType.gemini),
+                    tooltip: 'How to get Gemini key?',
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _obscureGemini ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      color: AppColors.textMuted,
+                      size: 20,
+                    ),
+                    onPressed: () => setState(() => _obscureGemini = !_obscureGemini),
+                  ),
+                ],
               ),
             ),
           ),
