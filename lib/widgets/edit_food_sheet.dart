@@ -303,15 +303,15 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildMacroField('Protein (g)', _proteinController, AppColors.primary),
+                      child: _buildMacroField('Protein (g)', _proteinController, AppColors.protein),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _buildMacroField('Carbs (g)', _carbsController, AppColors.secondary),
+                      child: _buildMacroField('Carbs (g)', _carbsController, AppColors.carbs),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _buildMacroField('Fat (g)', _fatController, AppColors.warning),
+                      child: _buildMacroField('Fat (g)', _fatController, AppColors.fat),
                     ),
                   ],
                 ),

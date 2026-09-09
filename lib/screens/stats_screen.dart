@@ -360,7 +360,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 value: '${data.avgProtein.toStringAsFixed(1)}g',
                 target: 'Target: ${targetPro.round()}g',
                 progress: (data.avgProtein / targetPro).clamp(0.0, 1.0),
-                color: AppColors.primary,
+                color: AppColors.protein,
                 status: _getProteinStatus(data.avgProtein, targetPro, data.daysWithData),
               ),
             ),
@@ -375,7 +375,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 value: '${data.avgCarbs.toStringAsFixed(1)}g',
                 target: 'Target: ${targetCarbs.round()}g',
                 progress: (data.avgCarbs / targetCarbs).clamp(0.0, 1.0),
-                color: AppColors.secondary,
+                color: AppColors.carbs,
                 status: const _StatusInfo('Tracked', AppColors.textMuted),
               ),
             ),
@@ -386,7 +386,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 value: '${data.avgFat.toStringAsFixed(1)}g',
                 target: 'Target: ${targetFat.round()}g',
                 progress: (data.avgFat / targetFat).clamp(0.0, 1.0),
-                color: AppColors.warning,
+                color: AppColors.fat,
                 status: const _StatusInfo('Tracked', AppColors.textMuted),
               ),
             ),
@@ -534,15 +534,15 @@ class _StatsScreenState extends State<StatsScreen> {
       intervalStep = 500;
     } else if (_currentMetric == 'protein') {
       targetValue = profile.targetProteinG > 0 ? profile.targetProteinG : 150.0;
-      primaryBarColor = AppColors.primary;
+      primaryBarColor = AppColors.protein;
       intervalStep = 50;
     } else if (_currentMetric == 'carbs') {
       targetValue = profile.targetCarbsG > 0 ? profile.targetCarbsG : 200.0;
-      primaryBarColor = AppColors.secondary;
+      primaryBarColor = AppColors.carbs;
       intervalStep = 50;
     } else if (_currentMetric == 'fat') {
       targetValue = profile.targetFatG > 0 ? profile.targetFatG : 65.0;
-      primaryBarColor = AppColors.warning;
+      primaryBarColor = AppColors.fat;
       intervalStep = 25;
     }
 
@@ -736,11 +736,11 @@ class _StatsScreenState extends State<StatsScreen> {
               Expanded(
                 child: Column(
                   children: [
-                    _buildDistributionLegendTile('Protein', '${data.avgProtein.round()}g', '$proPct%', AppColors.primary),
+                    _buildDistributionLegendTile('Protein', '${data.avgProtein.round()}g', '$proPct%', AppColors.protein),
                     const SizedBox(height: 8),
-                    _buildDistributionLegendTile('Carbs', '${data.avgCarbs.round()}g', '$carbPct%', AppColors.secondary),
+                    _buildDistributionLegendTile('Carbs', '${data.avgCarbs.round()}g', '$carbPct%', AppColors.carbs),
                     const SizedBox(height: 8),
-                    _buildDistributionLegendTile('Fat', '${data.avgFat.round()}g', '$fatPct%', AppColors.warning),
+                    _buildDistributionLegendTile('Fat', '${data.avgFat.round()}g', '$fatPct%', AppColors.fat),
                   ],
                 ),
               ),
@@ -1203,9 +1203,9 @@ class _DistributionDonutPainter extends CustomPainter {
       startAngle += sweep;
     }
 
-    drawArc(proRatio, AppColors.primary);
-    drawArc(carbRatio, AppColors.secondary);
-    drawArc(fatRatio, AppColors.warning);
+    drawArc(proRatio, AppColors.protein);
+    drawArc(carbRatio, AppColors.carbs);
+    drawArc(fatRatio, AppColors.fat);
   }
 
   @override

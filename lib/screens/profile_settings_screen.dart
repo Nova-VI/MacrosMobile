@@ -725,11 +725,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 // 3 Colorful Macro Capsules (Protein, Carbs, Fat)
                 Row(
                   children: [
-                    _buildTargetMacroCapsule('Protein', _targetProController, AppColors.primary),
+                    _buildTargetMacroCapsule('Protein', _targetProController, AppColors.protein),
                     const SizedBox(width: 8),
-                    _buildTargetMacroCapsule('Carbs', _targetCarbController, AppColors.secondary),
+                    _buildTargetMacroCapsule('Carbs', _targetCarbController, AppColors.carbs),
                     const SizedBox(width: 8),
-                    _buildTargetMacroCapsule('Fat', _targetFatController, AppColors.warning),
+                    _buildTargetMacroCapsule('Fat', _targetFatController, AppColors.fat),
                   ],
                 ),
 

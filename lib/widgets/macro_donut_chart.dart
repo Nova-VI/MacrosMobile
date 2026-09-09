@@ -36,7 +36,6 @@ class MacroDonutChart extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Rolling Count-Up Number Ticker
                   TweenAnimationBuilder<double>(
                     tween: Tween<double>(begin: 0.0, end: totalCalories),
                     duration: const Duration(milliseconds: 500),
@@ -44,7 +43,7 @@ class MacroDonutChart extends StatelessWidget {
                     builder: (context, val, _) {
                       return Text(
                         val.round().toString(),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: AppColors.textMain,
@@ -88,7 +87,6 @@ class _DonutChartPainter extends CustomPainter {
     final radius = (size.width - 12) / 2;
     const strokeWidth = 8.5;
 
-    // Track Background Circle
     final bgPaint = Paint()
       ..color = AppColors.border.withValues(alpha: 0.5)
       ..style = PaintingStyle.stroke
@@ -122,9 +120,9 @@ class _DonutChartPainter extends CustomPainter {
       startAngle += sweepAngle;
     }
 
-    drawSegment(proteinG * 4, AppColors.primary);
-    drawSegment(carbsG * 4, AppColors.secondary);
-    drawSegment(fatG * 9, AppColors.warning);
+    drawSegment(proteinG * 4, AppColors.protein);
+    drawSegment(carbsG * 4, AppColors.carbs);
+    drawSegment(fatG * 9, AppColors.fat);
   }
 
   @override

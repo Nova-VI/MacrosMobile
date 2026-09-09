@@ -16,10 +16,9 @@ class ThemeManager {
     if (sf != null) AppColors.surface = Color(sf);
   }
 
-  // Synchronous immediate in-memory update (0ms lag)
   static void setAccent(Color color) {
     AppColors.primary = color;
-    notifier.value++; // Forces all listening screens to repaint immediately
+    notifier.value++;
     HapticFeedback.lightImpact();
 
     SharedPreferences.getInstance().then((prefs) {
@@ -27,11 +26,10 @@ class ThemeManager {
     });
   }
 
-  // Synchronous immediate in-memory update (0ms lag)
   static void setBackground(Color bg, Color surface) {
     AppColors.background = bg;
     AppColors.surface = surface;
-    notifier.value++; // Forces all listening screens to repaint immediately
+    notifier.value++;
     HapticFeedback.lightImpact();
 
     SharedPreferences.getInstance().then((prefs) {
@@ -42,15 +40,22 @@ class ThemeManager {
 }
 
 class AppColors {
+  // Mutable Theme Colors
   static Color background = const Color(0xFF08080A);
   static Color surface = const Color(0xFF16161C);
   static Color primary = const Color(0xFF10B981);
 
-  static const Color surfaceHover = Color(0xFF22222B);
-  static const Color border = Color(0xFF272732);
+  // Dedicated Semantic Macro Colors (Decoupled from UI Accents)
+  static const Color protein = Color.fromARGB(255, 51, 167, 47); // Forest Green
+  static const Color carbs = Color.fromARGB(255, 57, 187, 252);   //  Cyan
+  static const Color fat = Color(0xFFEAB308);     // Golden Yellow
+
+  // Structural & Status Colors
   static const Color secondary = Color(0xFF3B82F6);
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);
+  static const Color surfaceHover = Color(0xFF22222B);
+  static const Color border = Color(0xFF272732);
   static const Color textMain = Color(0xFFF9FAFB);
   static const Color textMuted = Color(0xFF9898A6);
 }

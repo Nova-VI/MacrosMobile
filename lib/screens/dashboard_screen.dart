@@ -376,11 +376,11 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                     Expanded(
                       child: Column(
                         children: [
-                          _buildMacroRow('Protein', totalPro, targetPro, AppColors.primary, showRemaining),
+                          _buildMacroRow('Protein', totalPro, targetPro, AppColors.protein, showRemaining),
                           const SizedBox(height: 8),
-                          _buildMacroRow('Carbs', totalCarbs, targetCarbs, AppColors.secondary, showRemaining),
+                          _buildMacroRow('Carbs', totalCarbs, targetCarbs, AppColors.carbs, showRemaining),
                           const SizedBox(height: 8),
-                          _buildMacroRow('Fat', totalFat, targetFat, AppColors.warning, showRemaining),
+                          _buildMacroRow('Fat', totalFat, targetFat, AppColors.fat, showRemaining),
                         ],
                       ),
                     ),
@@ -766,11 +766,11 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                   children: [
                     _buildCompactCapsule('Calories', '${log.macros.calories.round()}', color: AppColors.primary),
                     const SizedBox(width: 6),
-                    _buildCompactCapsule('Protein', '${log.macros.proteinG.toStringAsFixed(1)}g', color: AppColors.primary),
+                    _buildCompactCapsule('Protein', '${log.macros.proteinG.toStringAsFixed(1)}g', color: AppColors.protein),
                     const SizedBox(width: 6),
-                    _buildCompactCapsule('Carbs', '${log.macros.carbsG.toStringAsFixed(1)}g', color: AppColors.secondary),
+                    _buildCompactCapsule('Carbs', '${log.macros.carbsG.toStringAsFixed(1)}g', color: AppColors.carbs),
                     const SizedBox(width: 6),
-                    _buildCompactCapsule('Fat', '${log.macros.fatG.toStringAsFixed(1)}g', color: AppColors.warning),
+                    _buildCompactCapsule('Fat', '${log.macros.fatG.toStringAsFixed(1)}g', color: AppColors.fat),
                   ],
                 ),
 
