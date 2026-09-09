@@ -1,3 +1,4 @@
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,11 +9,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../models/user_profile.dart';
-import '../models/weight_log.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/api_key_guide_sheet.dart';
+import 'weight_tracker_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -29,9 +30,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final AuthService _authService = AuthService();
 
   // Calculator Form Controllers
-  final _ageController = TextEditingController(text: '25');
+  DateTime _birthDate = DateTime(2001, 1, 1);
   final _heightController = TextEditingController(text: '175');
-  final _weightController = TextEditingController(text: '70');
   final _targetCalController = TextEditingController();
   final _targetProController = TextEditingController();
   final _targetCarbController = TextEditingController();
@@ -56,6 +56,23 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
   String? _userPhotoUrl;
 
+  int get _calculatedAge {
+    final now = DateTime.now();
+    int age = now.year - _birthDate.year;
+    if (now.month < _birthDate.month || (now.month == _birthDate.month && now.day < _birthDate.day)) {
+      age--;
+    }
+    return age > 0 ? age : 25;
+  }
+
+  double get _latestWeight {
+    final logs = _firestoreService.weightLogsNotifier.value;
+    if (logs.isNotEmpty) {
+      return logs.last.weightKg;
+    }
+    return _firestoreService.profileNotifier.value.weight;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -64,9 +81,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
   @override
   void dispose() {
-    _ageController.dispose();
     _heightController.dispose();
-    _weightController.dispose();
     _targetCalController.dispose();
     _targetProController.dispose();
     _targetCarbController.dispose();
@@ -92,29 +107,31 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       });
     }
 
-final p = _firestoreService.profileNotifier.value;
+    final p = _firestoreService.profileNotifier.value;
     DateTime phaseStart = DateTime.now();
 
-    if (p.goalHistory.isNotEmpty) {
+    if (p.goalPhases.isNotEmpty) {
+      try {
+        phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalPhases.last.startDate);
+      } catch (_) {}
+    } else if (p.goalHistory.isNotEmpty) {
       try {
         phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalHistory.last.date);
       } catch (_) {}
-    } else {
-      final logs = _firestoreService.logsNotifier.value;
-      final validDates = logs.map((l) => l.date).where((d) => d.isNotEmpty).toList()..sort();
-      if (validDates.isNotEmpty) {
-        try {
-          phaseStart = DateFormat('yyyy-MM-dd').parse(validDates.first);
-        } catch (_) {}
-      }
+    }
+
+    DateTime parsedDob = DateTime(2001, 1, 1);
+    if (p.birthDate.isNotEmpty) {
+      try {
+        parsedDob = DateTime.parse(p.birthDate);
+      } catch (_) {}
     }
 
     setState(() {
       _calcMethod = p.goalMode;
-      _ageController.text = p.age.toString();
+      _birthDate = parsedDob;
       _gender = p.gender;
       _heightController.text = (p.height % 1 == 0) ? p.height.toInt().toString() : p.height.toStringAsFixed(1);
-      _weightController.text = (p.weight % 1 == 0) ? p.weight.toInt().toString() : p.weight.toStringAsFixed(1);
       _activityLevel = p.activity;
       _weeklyGoal = p.goal;
       _proteinMultiplier = p.proteinMultiplier;
@@ -139,9 +156,9 @@ final p = _firestoreService.profileNotifier.value;
   void _performLiveCalculations() {
     if (_calcMethod != 'calculator') return;
 
-    final age = int.tryParse(_ageController.text) ?? 25;
+    final age = _calculatedAge;
     final height = double.tryParse(_heightController.text) ?? 175.0;
-    final weight = double.tryParse(_weightController.text) ?? 70.0;
+    final weight = _latestWeight;
     final activity = double.tryParse(_activityLevel) ?? 1.2;
     final goalAdjustment = double.tryParse(_weeklyGoal) ?? 0.0;
     final proteinFactor = double.tryParse(_proteinMultiplier) ?? 2.0;
@@ -186,7 +203,7 @@ final p = _firestoreService.profileNotifier.value;
   void _onManualCalorieChanged(String val) {
     final cals = double.tryParse(val) ?? 0.0;
     if (cals > 0) {
-      final weight = double.tryParse(_weightController.text) ?? 70.0;
+      final weight = _latestWeight;
       final proteinFactor = double.tryParse(_proteinMultiplier) ?? 2.0;
       final protein = (weight * proteinFactor).round();
       final fat = ((cals * 0.25) / 9).round();
@@ -198,6 +215,21 @@ final p = _firestoreService.profileNotifier.value;
         _targetFatController.text = fat.toString();
       });
     }
+  }
+
+  void _navigateToWeightTrackerWithAutoEdit() {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const WeightTrackerScreen(autoEditLatest: true),
+      ),
+    ).then((_) {
+      // Refresh calculations on return
+      if (mounted) {
+        _performLiveCalculations();
+      }
+    });
   }
 
   Future<void> _pickAndUploadAvatar() async {
@@ -319,21 +351,7 @@ final p = _firestoreService.profileNotifier.value;
   }
 
   Future<void> _saveProfileAndGoals() async {
-    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final currentHistory = List<GoalHistoryEntry>.from(_firestoreService.profileNotifier.value.goalHistory);
-
-    // If changing goal mode, record a new phase entry for today
-    currentHistory.removeWhere((e) => e.date == todayStr);
-    currentHistory.add(
-      GoalHistoryEntry(
-        date: todayStr,
-        targetCalories: double.tryParse(_targetCalController.text) ?? 2000.0,
-        targetProteinG: double.tryParse(_targetProController.text) ?? 150.0,
-        targetCarbsG: double.tryParse(_targetCarbController.text) ?? 200.0,
-        targetFatG: double.tryParse(_targetFatController.text) ?? 65.0,
-        goal: _weeklyGoal,
-      ),
-    );
+    final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
 
     final payload = UserProfile(
       id: '1',
@@ -342,27 +360,16 @@ final p = _firestoreService.profileNotifier.value;
       targetProteinG: double.tryParse(_targetProController.text) ?? 150.0,
       targetCarbsG: double.tryParse(_targetCarbController.text) ?? 200.0,
       targetFatG: double.tryParse(_targetFatController.text) ?? 65.0,
-      age: int.tryParse(_ageController.text) ?? 25,
+      birthDate: birthDateStr,
       gender: _gender,
       height: double.tryParse(_heightController.text) ?? 175.0,
-      weight: double.tryParse(_weightController.text) ?? 70.0,
+      weight: _latestWeight,
       activity: _activityLevel,
       goal: _weeklyGoal,
       proteinMultiplier: _proteinMultiplier,
-      goalHistory: currentHistory,
     );
 
     await _firestoreService.saveProfile(payload);
-
-    if (_calcMethod == 'calculator') {
-      final w = double.tryParse(_weightController.text) ?? 0.0;
-      final existingLogs = _firestoreService.weightLogsNotifier.value;
-      final hasToday = existingLogs.any((l) => l.date == todayStr);
-
-      if (w > 0 && !hasToday) {
-        await _firestoreService.setWeightLog(WeightLog(date: todayStr, weightKg: w));
-      }
-    }
 
     HapticFeedback.mediumImpact();
     _showToast('Target goals saved successfully!');
@@ -687,257 +694,368 @@ final p = _firestoreService.profileNotifier.value;
   }
 
   Widget _buildGoalsCalculatorCard() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Target Goals Calculator',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
-          ),
-          const SizedBox(height: 2),
-          const Text(
-            'Mifflin-St Jeor metabolic baseline with custom override',
-            style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 16),
+    return ValueListenableBuilder(
+      valueListenable: _firestoreService.weightLogsNotifier,
+      builder: (context, _, __) {
+        final currentWeight = _latestWeight;
 
-          // Read-only info pill showing current active goal phase
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('ACTIVE GOAL PHASE', style: TextStyle(fontSize: 9.5, color: AppColors.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
-                    const SizedBox(height: 2),
-                    Text('Active since ${DateFormat('MMM d, yyyy').format(_goalPhaseStartDate)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _weeklyGoal == '0' ? 'MAINTAIN' : (double.tryParse(_weeklyGoal)! > 0 ? 'BULK' : 'CUT'),
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
-                  ),
-                ),
-              ],
-            ),
+        return Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.border),
           ),
-          const SizedBox(height: 14),
-
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _buildGenderButton('Male', 'male', Icons.male_rounded),
+              const Text(
+                'Target Goals Calculator',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildGenderButton('Female', 'female', Icons.female_rounded),
+              const SizedBox(height: 2),
+              const Text(
+                'Mifflin-St Jeor metabolic baseline with custom override',
+                style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildBiometricInput('Age', _ageController, 'years'),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildBiometricInput('Height', _heightController, 'cm'),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildBiometricInput('Weight', _weightController, 'kg'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildSelectorTile(
-            label: 'Activity Level',
-            value: _activityLevel,
-            items: const [
-              DropdownMenuItem(value: '1.2', child: Text('Sedentary (Little/no exercise)')),
-              DropdownMenuItem(value: '1.375', child: Text('Lightly Active (1-3 days/wk)')),
-              DropdownMenuItem(value: '1.55', child: Text('Moderately Active (3-5 days/wk)')),
-              DropdownMenuItem(value: '1.725', child: Text('Very Active (6-7 days/wk)')),
-              DropdownMenuItem(value: '1.9', child: Text('Athlete (Hard daily exercise)')),
-            ],
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _activityLevel = val);
-                _performLiveCalculations();
-              }
-            },
-          ),
-          const SizedBox(height: 10),
-          _buildSelectorTile(
-            label: 'Weekly Goal Preset',
-            value: _weeklyGoal,
-            items: const [
-              DropdownMenuItem(value: '-500', child: Text('Lose 2 kg/month (-500 kcal)')),
-              DropdownMenuItem(value: '-250', child: Text('Lose 1 kg/month (-250 kcal)')),
-              DropdownMenuItem(value: '0', child: Text('Maintain Weight (0 kcal)')),
-              DropdownMenuItem(value: '250', child: Text('Gain 1 kg/month (+250 kcal)')),
-              DropdownMenuItem(value: '500', child: Text('Gain 2 kg/month (+500 kcal)')),
-            ],
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _weeklyGoal = val);
-                _performLiveCalculations();
-              }
-            },
-          ),
-          const SizedBox(height: 10),
-          _buildSelectorTile(
-            label: 'Protein Target Preference',
-            value: _proteinMultiplier,
-            items: const [
-              DropdownMenuItem(value: '2.2', child: Text('High Protein (2.2g / kg)')),
-              DropdownMenuItem(value: '2.0', child: Text('Moderate Protein (2.0g / kg)')),
-              DropdownMenuItem(value: '1.7', child: Text('Lower Protein (1.7g / kg)')),
-              DropdownMenuItem(value: '1.2', child: Text('Minimum Protein (1.2g / kg)')),
-            ],
-            onChanged: (val) {
-              if (val != null) {
-                setState(() => _proteinMultiplier = val);
-                _performLiveCalculations();
-              }
-            },
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-          // Target Hero Summary Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              // Active Goal Phase Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'DAILY TARGETS',
-                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
-                    ),
-                    Text(
-                      'Tap to manually adjust',
-                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.primary),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Target Calories',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
-                      ),
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 70,
-                            child: TextField(
-                              controller: _targetCalController,
-                              onTap: () => _selectAll(_targetCalController),
-                              onChanged: _onManualCalorieChanged,
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.primary,
-                              ),
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                filled: false,
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text('kcal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _buildTargetMacroCapsule('Protein', _targetProController, AppColors.protein),
-                    const SizedBox(width: 8),
-                    _buildTargetMacroCapsule('Carbs', _targetCarbController, AppColors.carbs),
-                    const SizedBox(width: 8),
-                    _buildTargetMacroCapsule('Fat', _targetFatController, AppColors.fat),
-                  ],
-                ),
-                if (_showExtremeWarning) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
-                    ),
-                    child: const Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Warning: Target is below recommended minimum energy safety guidelines.',
-                            style: TextStyle(color: AppColors.warning, fontSize: 11, fontWeight: FontWeight.w600),
-                          ),
+                        const Text('ACTIVE GOAL PHASE', style: TextStyle(fontSize: 9.5, color: AppColors.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+                        const SizedBox(height: 2),
+                        Text('Active since ${DateFormat('MMM d, yyyy').format(_goalPhaseStartDate)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _weeklyGoal == '0' ? 'MAINTAIN' : (double.tryParse(_weeklyGoal)! > 0 ? 'BULK' : 'CUT'),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildGenderButton('Male', 'male', Icons.male_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildGenderButton('Female', 'female', Icons.female_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Birthdate Picker Tile (Automatic Age)
+              _buildBirthDatePicker(),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBiometricInput('Height', _heightController, 'cm'),
+                  ),
+                  const SizedBox(width: 8),
+                  // Read-Only Weight Display with Tap-to-Edit Route
+                  Expanded(
+                    child: _buildReadOnlyWeightTile(currentWeight),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildSelectorTile(
+                label: 'Activity Level',
+                value: _activityLevel,
+                items: const [
+                  DropdownMenuItem(value: '1.2', child: Text('Sedentary (Little/no exercise)')),
+                  DropdownMenuItem(value: '1.375', child: Text('Lightly Active (1-3 days/wk)')),
+                  DropdownMenuItem(value: '1.55', child: Text('Moderately Active (3-5 days/wk)')),
+                  DropdownMenuItem(value: '1.725', child: Text('Very Active (6-7 days/wk)')),
+                  DropdownMenuItem(value: '1.9', child: Text('Athlete (Hard daily exercise)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _activityLevel = val);
+                    _performLiveCalculations();
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildSelectorTile(
+                label: 'Weekly Goal Preset',
+                value: _weeklyGoal,
+                items: const [
+                  DropdownMenuItem(value: '-500', child: Text('Lose 2 kg/month (-500 kcal)')),
+                  DropdownMenuItem(value: '-250', child: Text('Lose 1 kg/month (-250 kcal)')),
+                  DropdownMenuItem(value: '0', child: Text('Maintain Weight (0 kcal)')),
+                  DropdownMenuItem(value: '250', child: Text('Gain 1 kg/month (+250 kcal)')),
+                  DropdownMenuItem(value: '500', child: Text('Gain 2 kg/month (+500 kcal)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _weeklyGoal = val);
+                    _performLiveCalculations();
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildSelectorTile(
+                label: 'Protein Target Preference',
+                value: _proteinMultiplier,
+                items: const [
+                  DropdownMenuItem(value: '2.2', child: Text('High Protein (2.2g / kg)')),
+                  DropdownMenuItem(value: '2.0', child: Text('Moderate Protein (2.0g / kg)')),
+                  DropdownMenuItem(value: '1.7', child: Text('Lower Protein (1.7g / kg)')),
+                  DropdownMenuItem(value: '1.2', child: Text('Minimum Protein (1.2g / kg)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _proteinMultiplier = val);
+                    _performLiveCalculations();
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Target Summary Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'DAILY TARGETS',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
+                        ),
+                        Text(
+                          'Tap to manually adjust',
+                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.primary),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Target Calories',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                          ),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 70,
+                                child: TextField(
+                                  controller: _targetCalController,
+                                  onTap: () => _selectAll(_targetCalController),
+                                  onChanged: _onManualCalorieChanged,
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.primary,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text('kcal', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildTargetMacroCapsule('Protein', _targetProController, AppColors.protein),
+                        const SizedBox(width: 8),
+                        _buildTargetMacroCapsule('Carbs', _targetCarbController, AppColors.carbs),
+                        const SizedBox(width: 8),
+                        _buildTargetMacroCapsule('Fat', _targetFatController, AppColors.fat),
+                      ],
+                    ),
+                    if (_showExtremeWarning) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Warning: Target is below recommended minimum energy safety guidelines.',
+                                style: TextStyle(color: AppColors.warning, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _saveProfileAndGoals,
+                child: const Text('Save Target Goals'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBirthDatePicker() {
+    return InkWell(
+      onTap: () async {
+        HapticFeedback.selectionClick();
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: _birthDate,
+          firstDate: DateTime(1930),
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) {
+          setState(() {
+            _birthDate = picked;
+          });
+          _performLiveCalculations();
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Date of Birth',
+                  style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('MMM d, yyyy').format(_birthDate),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _saveProfileAndGoals,
-            child: const Text('Save Target Goals'),
-          ),
-        ],
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$_calculatedAge yrs',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyWeightTile(double weightKg) {
+    final displayWeight = (weightKg % 1 == 0) ? weightKg.toInt().toString() : weightKg.toStringAsFixed(1);
+
+    return InkWell(
+      onTap: _navigateToWeightTrackerWithAutoEdit,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Weight (Latest)', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                Icon(Icons.open_in_new_rounded, size: 13, color: AppColors.primary),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  displayWeight,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                ),
+                const SizedBox(width: 4),
+                const Text('kg', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

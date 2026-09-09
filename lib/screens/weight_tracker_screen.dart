@@ -7,7 +7,12 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 
 class WeightTrackerScreen extends StatefulWidget {
-  const WeightTrackerScreen({super.key});
+  final bool autoEditLatest;
+
+  const WeightTrackerScreen({
+    super.key,
+    this.autoEditLatest = false,
+  });
 
   @override
   State<WeightTrackerScreen> createState() => _WeightTrackerScreenState();
@@ -27,6 +32,21 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   void initState() {
     super.initState();
     _selectedLogDate = DateTime.now();
+
+    if (widget.autoEditLatest) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _triggerAutoEditLatest();
+      });
+    }
+  }
+
+  void _triggerAutoEditLatest() {
+    final logs = _firestoreService.weightLogsNotifier.value;
+    if (logs.isNotEmpty) {
+      _openEditWeightModal(logs.last);
+    } else {
+      _showToast('No prior weight logs found. Enter your current weight below.');
+    }
   }
 
   @override
@@ -166,6 +186,15 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
         final historyDesc = List<WeightLog>.from(filteredLogs).reversed.toList();
 
         return Scaffold(
+          appBar: widget.autoEditLatest
+              ? AppBar(
+                  title: const Text('Weight Tracker'),
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                )
+              : null,
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
@@ -235,10 +264,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   onTap: () => _selectAll(_weightInputController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
-                  decoration:  InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Body Weight',
                     suffixText: 'kg',
-                    suffixStyle: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 14),
                   ),
                 ),
               ),
@@ -285,7 +313,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Period Filters Row
           SizedBox(
             height: 34,
             child: ListView(
@@ -709,6 +736,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     backgroundColor: AppColors.danger,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => Navigator.pop(ctx, true),

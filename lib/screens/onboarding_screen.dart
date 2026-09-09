@@ -30,7 +30,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _nameController = TextEditingController();
 
   // Step 2: Biometrics Controllers
-  final _ageController = TextEditingController(text: '25');
+  DateTime _birthDate = DateTime(2001, 1, 1);
   final _heightController = TextEditingController(text: '175');
   final _weightController = TextEditingController(text: '70');
   final _targetCalController = TextEditingController(text: '2000');
@@ -49,6 +49,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _includeBranded = false;
   bool _obscureUsda = true;
   bool _obscureGemini = true;
+
+  int get _calculatedAge {
+    final now = DateTime.now();
+    int age = now.year - _birthDate.year;
+    if (now.month < _birthDate.month || (now.month == _birthDate.month && now.day < _birthDate.day)) {
+      age--;
+    }
+    return age > 0 ? age : 25;
+  }
 
   @override
   void initState() {
@@ -72,7 +81,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
-    _ageController.dispose();
     _heightController.dispose();
     _weightController.dispose();
     _targetCalController.dispose();
@@ -93,7 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _calculateTargets() {
-    final age = int.tryParse(_ageController.text) ?? 25;
+    final age = _calculatedAge;
     final height = double.tryParse(_heightController.text) ?? 175.0;
     final weight = double.tryParse(_weightController.text) ?? 70.0;
     final activity = double.tryParse(_activityLevel) ?? 1.2;
@@ -178,6 +186,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _submitStep2Biometrics() async {
+    final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
     final payload = UserProfile(
       id: '1',
       goalMode: 'calculator',
@@ -185,7 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       targetProteinG: double.tryParse(_targetProController.text) ?? 150.0,
       targetCarbsG: double.tryParse(_targetCarbController.text) ?? 200.0,
       targetFatG: double.tryParse(_targetFatController.text) ?? 65.0,
-      age: int.tryParse(_ageController.text) ?? 25,
+      birthDate: birthDateStr,
       gender: _gender,
       height: double.tryParse(_heightController.text) ?? 175.0,
       weight: double.tryParse(_weightController.text) ?? 70.0,
@@ -397,11 +406,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
         const SizedBox(height: 12),
 
-        // Biometrics Row
+        // Date of Birth Selector with Auto Age
+        _buildBirthDatePicker(),
+        const SizedBox(height: 12),
+
+        // Height & Weight Row
         Row(
           children: [
-            Expanded(child: _buildBiometricInput('Age', _ageController, 'years')),
-            const SizedBox(width: 8),
             Expanded(child: _buildBiometricInput('Height', _heightController, 'cm')),
             const SizedBox(width: 8),
             Expanded(child: _buildBiometricInput('Weight', _weightController, 'kg')),
@@ -475,14 +486,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'CALCULATED TARGETS',
                     style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
                   ),
-                  const Text(
+                  Text(
                     'Tap to edit values',
                     style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.textMuted),
                   ),
@@ -726,6 +737,65 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   // --- Helper Widgets ---
+
+  Widget _buildBirthDatePicker() {
+    return InkWell(
+      onTap: () async {
+        HapticFeedback.selectionClick();
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: _birthDate,
+          firstDate: DateTime(1930),
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) {
+          setState(() {
+            _birthDate = picked;
+          });
+          _calculateTargets();
+        }
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Date of Birth',
+                  style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('MMM d, yyyy').format(_birthDate),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$_calculatedAge years old',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildGenderButton(String label, String value, IconData icon) {
     final isSelected = _gender == value;

@@ -86,7 +86,6 @@ class FirestoreService {
       logs.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
       logsNotifier.value = logs;
 
-      // Automatically backfill goal history for older accounts using the earliest log
       _checkAndBackfillGoalHistory(uid, profileNotifier.value, logs);
     });
     _subscriptions.add(logSub);
@@ -117,22 +116,18 @@ class FirestoreService {
       if (doc.exists && doc.data() != null) {
         final profile = UserProfile.fromFirestore(doc.data());
         profileNotifier.value = profile;
-
-        // Check if backfill is needed when profile updates
         _checkAndBackfillGoalHistory(uid, profile, logsNotifier.value);
       }
     });
     _subscriptions.add(profileSub);
   }
 
-  /// Automatically backfills goal history for older accounts starting at their earliest log date
- void _checkAndBackfillGoalHistory(String uid, UserProfile profile, List<DailyLog> logs) async {
+  void _checkAndBackfillGoalHistory(String uid, UserProfile profile, List<DailyLog> logs) async {
     if (profile.goalHistory.isEmpty && logs.isNotEmpty) {
       final validDates = logs.map((l) => l.date).where((d) => d.isNotEmpty).toList()..sort();
       if (validDates.isNotEmpty) {
         final earliestDate = validDates.first;
 
-        // Uses your account's exact configured goals without any assumptions
         final initialEntry = GoalHistoryEntry(
           date: earliestDate,
           targetCalories: profile.targetCalories,
@@ -142,6 +137,17 @@ class FirestoreService {
           goal: profile.goal,
         );
 
+        final initialPhase = GoalPhase(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          startDate: earliestDate,
+          goal: profile.goal,
+          goalType: profile.goalType,
+          initialCalories: profile.targetCalories,
+          initialProteinG: profile.targetProteinG,
+          initialCarbsG: profile.targetCarbsG,
+          initialFatG: profile.targetFatG,
+        );
+
         final updatedProfile = UserProfile(
           id: profile.id,
           goalMode: profile.goalMode,
@@ -149,7 +155,7 @@ class FirestoreService {
           targetProteinG: profile.targetProteinG,
           targetCarbsG: profile.targetCarbsG,
           targetFatG: profile.targetFatG,
-          age: profile.age,
+          birthDate: profile.birthDate,
           gender: profile.gender,
           height: profile.height,
           weight: profile.weight,
@@ -157,11 +163,11 @@ class FirestoreService {
           goal: profile.goal,
           proteinMultiplier: profile.proteinMultiplier,
           goalHistory: [initialEntry],
+          goalPhases: [initialPhase],
         );
 
         profileNotifier.value = updatedProfile;
 
-        // Persist to Firestore
         _db.collection('users').doc(uid).collection('profile').doc('1').set(
           updatedProfile.toMap(),
           SetOptions(merge: true),
@@ -243,21 +249,61 @@ class FirestoreService {
     _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
   }
 
+  /// Saves the user profile. Only records a new Major Phase / Goal History snapshot
+  /// if the goal mode or weekly goal (cut/bulk/maintain) actually changed.
   Future<void> saveProfile(UserProfile profile) async {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final currentHistory = List<GoalHistoryEntry>.from(profileNotifier.value.goalHistory);
+    final currentProfile = profileNotifier.value;
 
-    currentHistory.removeWhere((e) => e.date == todayStr);
-    currentHistory.add(
-      GoalHistoryEntry(
-        date: todayStr,
-        targetCalories: profile.targetCalories,
-        targetProteinG: profile.targetProteinG,
-        targetCarbsG: profile.targetCarbsG,
-        targetFatG: profile.targetFatG,
+    final currentHistory = List<GoalHistoryEntry>.from(currentProfile.goalHistory);
+    final currentPhases = List<GoalPhase>.from(currentProfile.goalPhases);
+
+    final bool isGoalChanged = currentProfile.goal != profile.goal ||
+        currentProfile.goalMode != profile.goalMode ||
+        currentHistory.isEmpty;
+
+    if (isGoalChanged) {
+      // 1. Update Flat Goal History
+      currentHistory.removeWhere((e) => e.date == todayStr);
+      currentHistory.add(
+        GoalHistoryEntry(
+          date: todayStr,
+          targetCalories: profile.targetCalories,
+          targetProteinG: profile.targetProteinG,
+          targetCarbsG: profile.targetCarbsG,
+          targetFatG: profile.targetFatG,
+          goal: profile.goal,
+        ),
+      );
+
+      // 2. Close previous active major phase if any, and start a new major phase
+      if (currentPhases.isNotEmpty && currentPhases.last.endDate == null) {
+        final lastPhase = currentPhases.removeLast();
+        currentPhases.add(GoalPhase(
+          id: lastPhase.id,
+          startDate: lastPhase.startDate,
+          endDate: todayStr,
+          goal: lastPhase.goal,
+          goalType: lastPhase.goalType,
+          initialCalories: lastPhase.initialCalories,
+          initialProteinG: lastPhase.initialProteinG,
+          initialCarbsG: lastPhase.initialCarbsG,
+          initialFatG: lastPhase.initialFatG,
+          weeklyAdjustments: lastPhase.weeklyAdjustments,
+        ));
+      }
+
+      currentPhases.add(GoalPhase(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        startDate: todayStr,
         goal: profile.goal,
-      ),
-    );
+        goalType: profile.goalType,
+        initialCalories: profile.targetCalories,
+        initialProteinG: profile.targetProteinG,
+        initialCarbsG: profile.targetCarbsG,
+        initialFatG: profile.targetFatG,
+      ));
+    }
 
     final updatedProfile = UserProfile(
       id: profile.id,
@@ -266,7 +312,7 @@ class FirestoreService {
       targetProteinG: profile.targetProteinG,
       targetCarbsG: profile.targetCarbsG,
       targetFatG: profile.targetFatG,
-      age: profile.age,
+      birthDate: profile.birthDate,
       gender: profile.gender,
       height: profile.height,
       weight: profile.weight,
@@ -274,9 +320,10 @@ class FirestoreService {
       goal: profile.goal,
       proteinMultiplier: profile.proteinMultiplier,
       goalHistory: currentHistory,
+      goalPhases: currentPhases,
     );
 
-    _db.collection('users').doc(_uid).collection('profile').doc('1').set(
+    await _db.collection('users').doc(_uid).collection('profile').doc('1').set(
       updatedProfile.toMap(),
       SetOptions(merge: true),
     );
