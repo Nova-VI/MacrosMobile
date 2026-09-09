@@ -29,7 +29,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       setState(() {
         _currentIndex = index;
         if (index != 1) {
-          _editingLog = null; // Reset edit mode when leaving the log tab
+          _editingLog = null;
         }
       });
     }
@@ -40,7 +40,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     setState(() {
       _targetLogDate = date;
       _editingLog = editLog;
-      _currentIndex = 1; // Switch to Log tab
+      _currentIndex = 1;
     });
   }
 
@@ -57,7 +57,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onLogCompleted: () {
           setState(() {
             _editingLog = null;
-            _currentIndex = 0; // Return to Home on complete
+            _currentIndex = 0;
           });
         },
       ),
@@ -88,7 +88,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 children: [
                   Text(
                     titles[_currentIndex],
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
                       color: AppColors.textMain,
@@ -118,33 +118,39 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         stream: AuthService().authStateChanges,
                         builder: (context, snap) {
                           final photoUrl = snap.data?.photoURL;
-                          final name = snap.data?.displayName ?? snap.data?.email?.split('@').first ?? 'U';
 
-                          if (photoUrl != null && photoUrl.isNotEmpty) {
-                            return ClipOval(
-                              child: Image.network(
-                                photoUrl,
-                                width: 34,
-                                height: 34,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  // Offline fallback to initial
-                                  return Container(
-                                    color: AppColors.surface,
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                                      style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          }
-                          return Icon(
-                            Icons.person_rounded,
-                            size: 20,
-                            color: AppColors.primary,
+                          return ValueListenableBuilder<String>(
+                            valueListenable: AuthService.userNameNotifier,
+                            builder: (context, name, _) {
+                              if (photoUrl != null && photoUrl.isNotEmpty) {
+                                return ClipOval(
+                                  child: Image.network(
+                                    photoUrl,
+                                    width: 34,
+                                    height: 34,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: AppColors.surface,
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                );
+                              }
+                              return Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.primary,
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -162,7 +168,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
       ),
-      // Floating Minimalist Navigation Bar with True Circular Indicators
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         height: 64,

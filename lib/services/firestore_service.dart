@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
 import '../models/daily_log.dart';
 import '../models/weight_log.dart';
 import '../models/user_profile.dart';
+import 'auth_service.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -33,7 +35,31 @@ class FirestoreService {
   void initializeListeners(String uid) {
     cancelListeners();
 
-    // 1. Stream all foods
+    // 1. Stream user document for remote profile & name synchronization
+    final userSub = _db.collection('users').doc(uid).snapshots().listen((doc) async {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final remoteName = data['displayName']?.toString() ?? '';
+        final remoteCompleted = data['onboarding_completed'] == true;
+
+        final prefs = await SharedPreferences.getInstance();
+        final cachedName = prefs.getString('cached_user_name_$uid') ?? '';
+        final cachedCompleted = prefs.getBool('onboarding_completed_$uid');
+
+        if (remoteName.isNotEmpty && remoteName != cachedName) {
+          await prefs.setString('cached_user_name_$uid', remoteName);
+          AuthService.userNameNotifier.value = remoteName;
+        }
+
+        if (cachedCompleted != remoteCompleted) {
+          await prefs.setBool('onboarding_completed_$uid', remoteCompleted);
+          AuthService.onboardingCompletedNotifier.value = remoteCompleted;
+        }
+      }
+    });
+    _subscriptions.add(userSub);
+
+    // 2. Stream all foods
     final foodSub = _db
         .collection('users')
         .doc(uid)
@@ -46,7 +72,7 @@ class FirestoreService {
     });
     _subscriptions.add(foodSub);
 
-    // 2. Stream all logs
+    // 3. Stream all logs
     final logSub = _db
         .collection('users')
         .doc(uid)
@@ -61,7 +87,7 @@ class FirestoreService {
     });
     _subscriptions.add(logSub);
 
-    // 3. Stream weight logs
+    // 4. Stream weight logs
     final weightSub = _db
         .collection('users')
         .doc(uid)
@@ -76,7 +102,7 @@ class FirestoreService {
     });
     _subscriptions.add(weightSub);
 
-    // 4. Stream profile
+    // 5. Stream profile
     final profileSub = _db
         .collection('users')
         .doc(uid)
@@ -122,11 +148,10 @@ class FirestoreService {
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
 
-  // --- Optimistic Local Writes (Never blocks UI thread offline) ---
+  // --- Optimistic Local Writes ---
 
   Future<String> addLog(DailyLog log) async {
     final ref = _db.collection('users').doc(_uid).collection('logs').doc();
-    // Non-blocking write to local SQLite cache
     ref.set(log.toMap());
     return ref.id;
   }

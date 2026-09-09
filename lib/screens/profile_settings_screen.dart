@@ -198,6 +198,83 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
+  void _showEditNameDialog(String currentName) {
+    final nameController = TextEditingController(text: currentName);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text(
+          'What should we call you?',
+          style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 17),
+        ),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700),
+          decoration: const InputDecoration(
+            labelText: 'Your Name or Nickname',
+            hintText: 'e.g. Alex',
+          ),
+          onSubmitted: (_) {
+            _handleNameSave(nameController.text, currentName, ctx);
+          },
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: AppColors.textMain,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => _handleNameSave(nameController.text, currentName, ctx),
+                  child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleNameSave(String rawNewName, String currentName, BuildContext dialogContext) {
+    // 1. Immediately dismiss dialog without waiting
+    Navigator.pop(dialogContext);
+    HapticFeedback.selectionClick();
+
+    final trimmed = rawNewName.trim();
+    if (trimmed.isEmpty || trimmed == currentName.trim()) return;
+
+    // 2. Optimistic local cache & background sync
+    _authService.updateDisplayName(trimmed);
+
+    // 3. Immediately show notification toast
+    _showToast('Name updated to "$trimmed"');
+  }
+
   Future<void> _saveProfileAndGoals() async {
     final payload = UserProfile(
       id: '1',
@@ -276,7 +353,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       valueListenable: ThemeManager.notifier,
       builder: (context, _, __) {
         final user = _authService.currentUser;
-        final displayName = user?.displayName ?? (user?.email?.split('@').first ?? 'User');
         final email = user?.email ?? '';
 
         return Scaffold(
@@ -293,7 +369,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
               physics: const BouncingScrollPhysics(),
               children: [
-                _buildAccountCard(displayName, email),
+                ValueListenableBuilder<String>(
+                  valueListenable: AuthService.userNameNotifier,
+                  builder: (context, displayName, _) {
+                    return _buildAccountCard(displayName, email);
+                  },
+                ),
                 const SizedBox(height: 14),
                 _buildAppearanceCard(),
                 const SizedBox(height: 14),
@@ -494,11 +575,30 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textMain,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textMuted),
+                      splashRadius: 16,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      onPressed: () => _showEditNameDialog(name),
+                      tooltip: 'Edit Name',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(

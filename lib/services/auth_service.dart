@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firestore_service.dart';
@@ -12,11 +14,124 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  static final ValueNotifier<String> userNameNotifier = ValueNotifier('User');
+  static final ValueNotifier<bool> onboardingCompletedNotifier = ValueNotifier(true);
+
   Stream<User?> get authStateChanges => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
 
   Future<void> initialize() async {
     await GoogleSignIn.instance.initialize();
+    final user = _auth.currentUser;
+    if (user != null) {
+      await loadCachedUserData(user.uid);
+    }
+  }
+
+  Future<void> loadCachedUserData(String uid) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedName = prefs.getString('cached_user_name_$uid');
+    final cachedOnboarding = prefs.getBool('onboarding_completed_$uid');
+
+    if (cachedName != null && cachedName.isNotEmpty) {
+      userNameNotifier.value = cachedName;
+    } else if (currentUser?.displayName != null && currentUser!.displayName!.isNotEmpty) {
+      userNameNotifier.value = currentUser!.displayName!;
+      await prefs.setString('cached_user_name_$uid', currentUser!.displayName!);
+    } else {
+      userNameNotifier.value = currentUser?.email?.split('@').first ?? 'User';
+    }
+
+    if (cachedOnboarding != null) {
+      onboardingCompletedNotifier.value = cachedOnboarding;
+    }
+  }
+
+  /// Optimistic, non-blocking name update that works 100% offline
+  Future<void> updateDisplayName(String newName) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final trimmedName = newName.trim();
+    if (trimmedName.isEmpty) return;
+
+    // 1. Instant local reactive state update
+    userNameNotifier.value = trimmedName;
+
+    // 2. Instant local disk cache persist
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cached_user_name_${user.uid}', trimmedName);
+
+    // 3. Background non-blocking sync to Firestore and Firebase Auth
+    _syncDisplayNameToRemote(user, trimmedName);
+  }
+
+  void _syncDisplayNameToRemote(User user, String newName) async {
+    try {
+      _db.collection('users').doc(user.uid).set({
+        'displayName': newName,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      await user.updateDisplayName(newName).timeout(const Duration(seconds: 4));
+    } catch (_) {}
+  }
+
+  Future<void> setOnboardingCompleted(bool completed) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    onboardingCompletedNotifier.value = completed;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_completed_${user.uid}', completed);
+
+    _db.collection('users').doc(user.uid).set({
+      'onboarding_completed': completed,
+      'onboarding_completed_at': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Checks if onboarding is finished. Existing users who already have a profile bypass onboarding.
+  Future<bool> checkIsOnboardingCompleted(String uid) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getBool('onboarding_completed_$uid');
+    if (cached != null) {
+      onboardingCompletedNotifier.value = cached;
+      return cached;
+    }
+
+    try {
+      // 1. Check if user document has the onboarding flag
+      final doc = await _db
+          .collection('users')
+          .doc(uid)
+          .get(const GetOptions(source: Source.serverAndCache));
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        if (data['onboarding_completed'] == true) {
+          await prefs.setBool('onboarding_completed_$uid', true);
+          onboardingCompletedNotifier.value = true;
+          return true;
+        }
+      }
+
+      // 2. Backward compatibility: if existing user already configured target goals, bypass onboarding
+      final profileDoc = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('profile')
+          .doc('1')
+          .get(const GetOptions(source: Source.serverAndCache));
+
+      if (profileDoc.exists && profileDoc.data() != null) {
+        await setOnboardingCompleted(true);
+        return true;
+      }
+    } catch (_) {}
+
+    onboardingCompletedNotifier.value = false;
+    return false;
   }
 
   Future<UserCredential> signInWithEmail(String email, String password) async {
@@ -26,6 +141,7 @@ class AuthService {
     );
     _syncUserRecord(credential.user);
     if (credential.user != null) {
+      await loadCachedUserData(credential.user!.uid);
       FirestoreService().initializeListeners(credential.user!.uid);
     }
     return credential;
@@ -38,6 +154,7 @@ class AuthService {
     );
     _syncUserRecord(credential.user);
     if (credential.user != null) {
+      await loadCachedUserData(credential.user!.uid);
       FirestoreService().initializeListeners(credential.user!.uid);
     }
     return credential;
@@ -54,6 +171,7 @@ class AuthService {
     final userCredential = await _auth.signInWithCredential(credential);
     _syncUserRecord(userCredential.user);
     if (userCredential.user != null) {
+      await loadCachedUserData(userCredential.user!.uid);
       FirestoreService().initializeListeners(userCredential.user!.uid);
     }
     return userCredential;
@@ -61,16 +179,30 @@ class AuthService {
 
   Future<void> signOut() async {
     FirestoreService().cancelListeners();
+    userNameNotifier.value = 'User';
+    onboardingCompletedNotifier.value = false;
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('cached_user_photo');
     await GoogleSignIn.instance.signOut();
     await _auth.signOut();
   }
 
-  // Non-blocking background sync with offline cache
   void _syncUserRecord(User? user) async {
     if (user == null) return;
     final prefs = await SharedPreferences.getInstance();
+
+    final cachedName = prefs.getString('cached_user_name_${user.uid}');
+    String name;
+    if (cachedName != null && cachedName.isNotEmpty) {
+      name = cachedName;
+    } else if (user.displayName != null && user.displayName!.isNotEmpty) {
+      name = user.displayName!;
+      await prefs.setString('cached_user_name_${user.uid}', name);
+    } else {
+      name = user.email?.split('@').first ?? 'User';
+    }
+    userNameNotifier.value = name;
 
     String photo = user.photoURL ?? '';
     final cachedPhoto = prefs.getString('cached_user_photo');
@@ -84,7 +216,7 @@ class AuthService {
     userRef.set({
       'uid': user.uid,
       'email': user.email ?? '',
-      'displayName': user.displayName ?? (user.email?.split('@').first ?? 'User'),
+      'displayName': name,
       'photoURL': photo,
       'last_login': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
