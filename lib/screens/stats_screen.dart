@@ -18,9 +18,46 @@ class StatsScreen extends StatefulWidget {
 class _StatsScreenState extends State<StatsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
-  String _currentRange = '7'; // Default 7 days
+  String _currentRange = '30'; // Default 30 days
   String _currentMetric = 'calories'; // 'calories', 'protein', 'carbs', 'fat'
   bool _isMicrosExpanded = true;
+  DateTime? _customStartDate;
+  DateTime? _customEndDate;
+
+  Future<void> _pickCustomRange() async {
+    HapticFeedback.lightImpact();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      initialDateRange: _customStartDate != null && _customEndDate != null
+          ? DateTimeRange(start: _customStartDate!, end: _customEndDate!)
+          : DateTimeRange(
+              start: DateTime.now().subtract(const Duration(days: 14)),
+              end: DateTime.now(),
+            ),
+      builder: (context, child) {
+        return Theme(
+          data: AppTheme.darkTheme.copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: AppColors.primary,
+              surface: AppColors.surface,
+              onSurface: AppColors.textMain,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _currentRange = 'custom';
+        _customStartDate = picked.start;
+        _customEndDate = picked.end;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,35 +75,20 @@ class _StatsScreenState extends State<StatsScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
                   physics: const BouncingScrollPhysics(),
                   children: [
-                    // Period Filter Chips
                     _buildRangeFilterRow(),
                     const SizedBox(height: 14),
-
-                    // Creative Metric: Adherence Index Banner
                     _buildAdherenceBanner(statsData, profile),
                     const SizedBox(height: 14),
-
-                    // Island 1: Meta Summary Card (Days Tracked, Total Logs, Avg Logs)
                     _buildMetaCard(statsData),
                     const SizedBox(height: 14),
-
-                    // Island 2: 4 Goal-Aware Summary Cards Grid
                     _buildSummaryCardsGrid(statsData, profile),
                     const SizedBox(height: 14),
-
-                    // Island 3: Clean Daily Trend Chart (No black bars, clean Y-axis)
                     _buildDailyTrendCard(statsData, profile),
                     const SizedBox(height: 14),
-
-                    // Island 4: Macro Distribution Donut Card
                     _buildMacroBreakdownCard(statsData),
                     const SizedBox(height: 14),
-
-                    // Island 5: Balanced Dual-Column Micronutrient Matrix
                     _buildMicronutrientCard(statsData),
                     const SizedBox(height: 14),
-
-                    // Island 6: Automated Insights Card
                     _buildInsightsCard(statsData, profile),
                   ],
                 ),
@@ -79,6 +101,10 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildRangeFilterRow() {
+    final customLabel = (_currentRange == 'custom' && _customStartDate != null && _customEndDate != null)
+        ? '${DateFormat('M/d').format(_customStartDate!)} - ${DateFormat('M/d').format(_customEndDate!)}'
+        : 'Custom';
+
     return SizedBox(
       height: 36,
       child: ListView(
@@ -92,18 +118,24 @@ class _StatsScreenState extends State<StatsScreen> {
           _buildRangeChip('90 Days', '90'),
           const SizedBox(width: 8),
           _buildRangeChip('All Time', 'all'),
+          const SizedBox(width: 8),
+          _buildRangeChip(customLabel, 'custom', onTap: _pickCustomRange),
         ],
       ),
     );
   }
 
-  Widget _buildRangeChip(String label, String rangeKey) {
+  Widget _buildRangeChip(String label, String rangeKey, {VoidCallback? onTap}) {
     final isSelected = _currentRange == rangeKey;
 
     return InkWell(
       onTap: () {
         HapticFeedback.selectionClick();
-        setState(() => _currentRange = rangeKey);
+        if (onTap != null) {
+          onTap();
+        } else {
+          setState(() => _currentRange = rangeKey);
+        }
       },
       borderRadius: BorderRadius.circular(14),
       child: Container(
@@ -126,10 +158,9 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // Creative Metric: Adherence & Consistency Score
   Widget _buildAdherenceBanner(_StatsData data, UserProfile profile) {
-    final score = _calculateAdherenceScore(data, profile);
-    final goalLabel = profile.goalTypeLabel;
+    final score = _calculateAdherenceScore(data);
+    final hasMultiplePhases = data.distinctGoalTypes.length > 1;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -177,7 +208,11 @@ class _StatsScreenState extends State<StatsScreen> {
                         border: Border.all(color: AppColors.border),
                       ),
                       child: Text(
-                        profile.goalType.name.toUpperCase(),
+                        hasMultiplePhases
+                            ? 'MULTI-PHASE'
+                            : (data.distinctGoalTypes.isNotEmpty
+                                ? data.distinctGoalTypes.first.name.toUpperCase()
+                                : profile.goalType.name.toUpperCase()),
                         style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                       ),
                     ),
@@ -185,12 +220,14 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  score >= 85
-                      ? 'Target locked! Hitting your goals for $goalLabel.'
-                      : score >= 65
-                          ? 'Consistent progress. Watch your protein minimums and portion sizes.'
-                          : 'Adherence slipping. Prioritize protein and stay within your target energy window.',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.3),
+                  hasMultiplePhases
+                      ? 'Adherence calculated dynamically across your cutting & bulking goal periods.'
+                      : (score >= 85
+                          ? 'Target locked! Hitting your goals consistently.'
+                          : score >= 65
+                              ? 'Consistent progress. Keep an eye on protein and caloric targets.'
+                              : 'Adherence slipping. Prioritize protein and stay within your target energy window.'),
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.3),
                 ),
               ],
             ),
@@ -200,26 +237,18 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // --- Smart Non-Linear Scoring Engine ---
-
-  int _calculateAdherenceScore(_StatsData data, UserProfile profile) {
+  int _calculateAdherenceScore(_StatsData data) {
     if (data.daysWithData == 0) return 0;
-
-    final targetCal = profile.targetCalories > 0 ? profile.targetCalories : 2000.0;
-    final targetPro = profile.targetProteinG > 0 ? profile.targetProteinG : 150.0;
-    final goalType = profile.goalType;
 
     double cumulativeDailyScore = 0.0;
     int evaluatedDays = 0;
 
     for (final day in data.dailyMap.values) {
       if (day.calories > 0) {
-        final proScore = _computeProteinScore(day.proteinG, targetPro);
-        final calScore = _computeCalorieScore(day.calories, targetCal, goalType);
+        final proScore = _computeProteinScore(day.proteinG, day.targetProteinG);
+        final calScore = _computeCalorieScore(day.calories, day.targetCalories, day.goalType);
 
-        // Day Score: Protein modifies calories. If calories are blown, day score drops to 0.
         final dayScore = calScore * (0.25 + (0.75 * proScore));
-
         cumulativeDailyScore += dayScore;
         evaluatedDays++;
       }
@@ -227,70 +256,46 @@ class _StatsScreenState extends State<StatsScreen> {
 
     if (evaluatedDays == 0) return 0;
 
-    // Component 1: Daily Habit & Consistency (65% Weight)
     final dailyConsistencyScore = cumulativeDailyScore / evaluatedDays;
-
-    // Component 2: Overall Net Energy Budget (35% Weight)
-    // Evaluates whether your net average stayed within your goal direction
-    final netEnergyScore = _computeCalorieScore(data.avgCalories, targetCal, goalType);
-
-    // Weighted blend: Outliers hurt the score proportionately without zeroing out good days
-    final finalScore = (dailyConsistencyScore * 0.50) + (netEnergyScore * 0.50);
-
-    return (finalScore * 100).round().clamp(0, 100);
+    return (dailyConsistencyScore * 100).round().clamp(0, 100);
   }
 
-  // Protein Curve: Over-target is NEVER penalized. Under-target follows a non-linear decay curve.
   double _computeProteinScore(double actual, double target) {
-    if (actual >= target) return 1.0; // Extra protein is 100% rewarded
-
+    if (actual >= target) return 1.0;
     final deficit = target - actual;
-    if (deficit >= 55.0) return 0.0; // 55g+ under target drops score to 0
-
-    // Non-linear decay: (deficit / 55)^2.4
-    final penalty = math.pow(deficit / 55.0, 2.4).toDouble();
-    return (1.0 - penalty).clamp(0.0, 1.0);
+    final score = math.exp(-math.pow(deficit / 55.0, 2.0));
+    return score.clamp(0.0, 1.0);
   }
 
-  // Calorie Curve: Objective-aware (Cut vs Bulk vs Maintain)
   double _computeCalorieScore(double actual, double target, GoalType goalType) {
+    if (target <= 0) return 1.0;
     final diff = actual - target;
     double effectiveError;
 
     switch (goalType) {
       case GoalType.cut:
         if (diff <= 0) {
-          // Under target on a cut: High tolerance (0.55).
-          // Eating deeper into a deficit still serves the primary fat-loss goal.
-          effectiveError = diff.abs() * 0.55;
+          effectiveError = diff.abs() * 0.35;
         } else {
-          // Over target on a cut: Strict penalty (1.35).
-          // Overeating wipes out the calorie deficit.
-          effectiveError = diff * 1.35;
+          effectiveError = diff * 1.25;
         }
         break;
 
       case GoalType.bulk:
         if (diff >= 0) {
-          // Over target on a bulk: Moderate tolerance (1.0).
-          // Allows a clean surplus, but penalizes dirty bulk fat spillover.
-          effectiveError = diff * 1.0;
+          effectiveError = diff * 0.7;
         } else {
-          // Under target on a bulk: Strict penalty (1.35).
-          // Undereating stops muscle hypertrophy.
-          effectiveError = diff.abs() * 1.35;
+          effectiveError = diff.abs() * 1.25;
         }
         break;
 
       case GoalType.maintain:
-        effectiveError = diff.abs(); // Symmetric for maintenance
+        effectiveError = diff.abs();
         break;
     }
 
-    if (effectiveError >= 500.0) return 0.0;
-
-    final penalty = math.pow(effectiveError / 500.0, 2.2).toDouble();
-    return (1.0 - penalty).clamp(0.0, 1.0);
+    final score = math.exp(-math.pow(effectiveError / 650.0, 2.0));
+    return score.clamp(0.0, 1.0);
   }
 
   Widget _buildMetaCard(_StatsData data) {
@@ -322,22 +327,22 @@ class _StatsScreenState extends State<StatsScreen> {
       children: [
         Text(
           value,
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.4),
+          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.4),
         ),
         const SizedBox(height: 2),
         Text(
           label.toUpperCase(),
-          style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.4),
+          style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.4),
         ),
       ],
     );
   }
 
   Widget _buildSummaryCardsGrid(_StatsData data, UserProfile profile) {
-    final targetCals = profile.targetCalories > 0 ? profile.targetCalories : 2000.0;
-    final targetPro = profile.targetProteinG > 0 ? profile.targetProteinG : 150.0;
-    final targetCarbs = profile.targetCarbsG > 0 ? profile.targetCarbsG : 200.0;
-    final targetFat = profile.targetFatG > 0 ? profile.targetFatG : 65.0;
+    final targetCals = data.effectiveTargetCalories;
+    final targetPro = data.effectiveTargetProtein;
+    final targetCarbs = data.effectiveTargetCarbs;
+    final targetFat = data.effectiveTargetFat;
 
     return Column(
       children: [
@@ -348,7 +353,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'Avg Calories',
                 value: '${data.avgCalories.round()} kcal',
                 target: 'Target: ${targetCals.round()} kcal',
-                progress: (data.avgCalories / targetCals).clamp(0.0, 1.0),
+                progress: (data.avgCalories / (targetCals > 0 ? targetCals : 2000.0)).clamp(0.0, 1.0),
                 color: AppColors.primary,
                 status: _getCalorieStatus(data.avgCalories, targetCals, profile),
               ),
@@ -359,7 +364,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'Avg Protein',
                 value: '${data.avgProtein.toStringAsFixed(1)}g',
                 target: 'Target: ${targetPro.round()}g',
-                progress: (data.avgProtein / targetPro).clamp(0.0, 1.0),
+                progress: (data.avgProtein / (targetPro > 0 ? targetPro : 150.0)).clamp(0.0, 1.0),
                 color: AppColors.protein,
                 status: _getProteinStatus(data.avgProtein, targetPro, data.daysWithData),
               ),
@@ -374,7 +379,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'Avg Carbs',
                 value: '${data.avgCarbs.toStringAsFixed(1)}g',
                 target: 'Target: ${targetCarbs.round()}g',
-                progress: (data.avgCarbs / targetCarbs).clamp(0.0, 1.0),
+                progress: (data.avgCarbs / (targetCarbs > 0 ? targetCarbs : 200.0)).clamp(0.0, 1.0),
                 color: AppColors.carbs,
                 status: const _StatusInfo('Tracked', AppColors.textMuted),
               ),
@@ -385,7 +390,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 label: 'Avg Fat',
                 value: '${data.avgFat.toStringAsFixed(1)}g',
                 target: 'Target: ${targetFat.round()}g',
-                progress: (data.avgFat / targetFat).clamp(0.0, 1.0),
+                progress: (data.avgFat / (targetFat > 0 ? targetFat : 65.0)).clamp(0.0, 1.0),
                 color: AppColors.fat,
                 status: const _StatusInfo('Tracked', AppColors.textMuted),
               ),
@@ -405,7 +410,7 @@ class _StatsScreenState extends State<StatsScreen> {
     required _StatusInfo status,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
@@ -417,19 +422,35 @@ class _StatsScreenState extends State<StatsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label.toUpperCase(),
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
+              Flexible(
+                child: Text(
+                  label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textMuted,
+                    letterSpacing: 0.3,
+                  ),
+                ),
               ),
+              const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: status.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   status.label,
-                  style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: status.color),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w800,
+                    color: status.color,
+                  ),
                 ),
               ),
             ],
@@ -437,12 +458,16 @@ class _StatsScreenState extends State<StatsScreen> {
           const SizedBox(height: 8),
           Text(
             value,
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.3),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.3),
           ),
           const SizedBox(height: 2),
           Text(
             target,
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -489,8 +514,8 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: DropdownButton<String>(
                     value: _currentMetric,
                     dropdownColor: AppColors.surface,
-                    style: TextStyle(color: AppColors.textMain, fontSize: 12, fontWeight: FontWeight.w700),
-                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 16),
+                    style: const TextStyle(color: AppColors.textMain, fontSize: 12, fontWeight: FontWeight.w700),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 16),
                     onChanged: (val) {
                       if (val != null) setState(() => _currentMetric = val);
                     },
@@ -524,46 +549,56 @@ class _StatsScreenState extends State<StatsScreen> {
     final dateKeys = data.dailyDateKeys;
     final barGroups = <BarChartGroupData>[];
 
-    double targetValue = 2000.0;
     Color primaryBarColor = AppColors.primary;
-    double intervalStep = 500;
+    if (_currentMetric == 'calories') primaryBarColor = AppColors.primary;
+    if (_currentMetric == 'protein') primaryBarColor = AppColors.protein;
+    if (_currentMetric == 'carbs') primaryBarColor = AppColors.carbs;
+    if (_currentMetric == 'fat') primaryBarColor = AppColors.fat;
 
-    if (_currentMetric == 'calories') {
-      targetValue = profile.targetCalories > 0 ? profile.targetCalories : 2000.0;
-      primaryBarColor = AppColors.primary;
-      intervalStep = 500;
-    } else if (_currentMetric == 'protein') {
-      targetValue = profile.targetProteinG > 0 ? profile.targetProteinG : 150.0;
-      primaryBarColor = AppColors.protein;
-      intervalStep = 50;
-    } else if (_currentMetric == 'carbs') {
-      targetValue = profile.targetCarbsG > 0 ? profile.targetCarbsG : 200.0;
-      primaryBarColor = AppColors.carbs;
-      intervalStep = 50;
-    } else if (_currentMetric == 'fat') {
-      targetValue = profile.targetFatG > 0 ? profile.targetFatG : 65.0;
-      primaryBarColor = AppColors.fat;
-      intervalStep = 25;
-    }
-
-    // Find actual highest bar
     double maxBarValue = 0;
+    double maxTargetValue = 0;
+
     for (int i = 0; i < dateKeys.length; i++) {
       final key = dateKeys[i];
       final day = data.dailyMap[key];
       double barVal = 0;
+      double dayTarget = 0;
+
       if (day != null) {
-        if (_currentMetric == 'calories') barVal = day.calories;
-        if (_currentMetric == 'protein') barVal = day.proteinG;
-        if (_currentMetric == 'carbs') barVal = day.carbsG;
-        if (_currentMetric == 'fat') barVal = day.fatG;
+        if (_currentMetric == 'calories') {
+          barVal = day.calories;
+          dayTarget = day.targetCalories;
+        } else if (_currentMetric == 'protein') {
+          barVal = day.proteinG;
+          dayTarget = day.targetProteinG;
+        } else if (_currentMetric == 'carbs') {
+          barVal = day.carbsG;
+          dayTarget = day.targetCarbsG;
+        } else if (_currentMetric == 'fat') {
+          barVal = day.fatG;
+          dayTarget = day.targetFatG;
+        }
       }
+
       if (barVal > maxBarValue) maxBarValue = barVal;
+      if (dayTarget > maxTargetValue) maxTargetValue = dayTarget;
     }
 
-    // Snap ceiling to clean interval to prevent label collision
-    final referencePeak = math.max(maxBarValue, targetValue);
-    final ceiling = (math.max(referencePeak * 1.15, intervalStep * 2) / intervalStep).ceil() * intervalStep;
+    final referencePeak = math.max(maxBarValue, maxTargetValue);
+
+    // Responsive clean intervalStep scaled directly to each metric
+    double intervalStep;
+    if (_currentMetric == 'calories') {
+      intervalStep = referencePeak > 3000 ? 1000 : 500;
+    } else if (_currentMetric == 'protein') {
+      intervalStep = referencePeak > 180 ? 50 : 30;
+    } else if (_currentMetric == 'carbs') {
+      intervalStep = referencePeak > 300 ? 75 : 50;
+    } else { // fat
+      intervalStep = referencePeak > 100 ? 25 : 15;
+    }
+
+    final ceiling = (math.max(referencePeak * 1.18, intervalStep * 2) / intervalStep).ceil() * intervalStep;
 
     for (int i = 0; i < dateKeys.length; i++) {
       final key = dateKeys[i];
@@ -592,101 +627,138 @@ class _StatsScreenState extends State<StatsScreen> {
       );
     }
 
-    return BarChart(
-      BarChartData(
-        maxY: ceiling,
-        barGroups: barGroups,
-        borderData: FlBorderData(show: false),
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: intervalStep,
-          getDrawingHorizontalLine: (val) {
-            return FlLine(
-              color: AppColors.border.withValues(alpha: 0.35),
-              strokeWidth: 1,
-            );
-          },
-        ),
-        extraLinesData: ExtraLinesData(
-          horizontalLines: [
-            HorizontalLine(
-              y: targetValue,
-              color: AppColors.danger.withValues(alpha: 0.75),
-              strokeWidth: 1.5,
-              dashArray: [6, 4],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const leftPadding = 36.0;
+        const bottomPadding = 22.0;
+        final plotWidth = constraints.maxWidth - leftPadding;
+        final plotHeight = constraints.maxHeight - bottomPadding;
+
+        final dailyTargets = dateKeys.map((k) {
+          final day = data.dailyMap[k];
+          if (_currentMetric == 'calories') return day?.targetCalories ?? 2000.0;
+          if (_currentMetric == 'protein') return day?.targetProteinG ?? 150.0;
+          if (_currentMetric == 'carbs') return day?.targetCarbsG ?? 200.0;
+          if (_currentMetric == 'fat') return day?.targetFatG ?? 65.0;
+          return 2000.0;
+        }).toList();
+
+        return Stack(
+          children: [
+            BarChart(
+              BarChartData(
+                maxY: ceiling,
+                barGroups: barGroups,
+                borderData: FlBorderData(show: false),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: intervalStep,
+                  getDrawingHorizontalLine: (val) {
+                    return FlLine(
+                      color: AppColors.border.withValues(alpha: 0.35),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: leftPadding,
+                      interval: intervalStep,
+                      getTitlesWidget: (val, meta) {
+                        if (val >= ceiling || val == 0) return const SizedBox.shrink();
+                        return Text(
+                          val.round().toString(),
+                          style: const TextStyle(color: AppColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.w600),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: bottomPadding,
+                      getTitlesWidget: (val, meta) {
+                        final idx = val.toInt();
+                        if (idx < 0 || idx >= dateKeys.length) return const SizedBox.shrink();
+
+                        if (dateKeys.length > 7) {
+                          final step = (dateKeys.length / 5).ceil();
+                          if (idx % step != 0 && idx != dateKeys.length - 1) return const SizedBox.shrink();
+                        }
+
+                        final parts = dateKeys[idx].split('-');
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${parts[1]}/${parts[2]}',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) => AppColors.surface,
+                    tooltipBorder: const BorderSide(color: AppColors.border),
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final dateStr = dateKeys[group.x];
+                      final day = data.dailyMap[dateStr];
+
+                      double dayTarget = 0;
+                      if (_currentMetric == 'calories') dayTarget = day?.targetCalories ?? 0;
+                      if (_currentMetric == 'protein') dayTarget = day?.targetProteinG ?? 0;
+                      if (_currentMetric == 'carbs') dayTarget = day?.targetCarbsG ?? 0;
+                      if (_currentMetric == 'fat') dayTarget = day?.targetFatG ?? 0;
+
+                      final goalLabel = day?.goalType.name.toUpperCase() ?? '';
+                      final unit = _currentMetric == 'calories' ? 'kcal' : 'g';
+
+                      return BarTooltipItem(
+                        '$dateStr\n',
+                        const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                        children: [
+                          TextSpan(
+                            text: '${rod.toY.round()} $unit',
+                            style: TextStyle(color: primaryBarColor, fontSize: 13, fontWeight: FontWeight.w800),
+                          ),
+                          TextSpan(
+                            text: '\nTarget: ${dayTarget.round()} $unit ${goalLabel.isNotEmpty ? '($goalLabel)' : ''}',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+
+            // Stepped dynamic target line properly scaled per metric
+            Positioned(
+              left: leftPadding,
+              top: 0,
+              width: plotWidth,
+              height: plotHeight,
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: _SteppedTargetLinePainter(
+                    dailyTargets: dailyTargets,
+                    ceiling: ceiling,
+                    color: AppColors.danger.withValues(alpha: 0.85),
+                  ),
+                ),
+              ),
             ),
           ],
-        ),
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 36,
-              interval: intervalStep,
-              getTitlesWidget: (val, meta) {
-                // Drop collision on top ceiling
-                if (val >= ceiling || val == 0) return const SizedBox.shrink();
-                return Text(
-                  val.round().toString(),
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 9.5, fontWeight: FontWeight.w600),
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              getTitlesWidget: (val, meta) {
-                final idx = val.toInt();
-                if (idx < 0 || idx >= dateKeys.length) return const SizedBox.shrink();
-
-                // For 7 days, always show all 7
-                if (dateKeys.length > 7) {
-                  final step = (dateKeys.length / 5).ceil();
-                  if (idx % step != 0 && idx != dateKeys.length - 1) return const SizedBox.shrink();
-                }
-
-                final parts = dateKeys[idx].split('-');
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    '${parts[1]}/${parts[2]}',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        barTouchData: BarTouchData(
-          touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => AppColors.surface,
-            tooltipBorder: BorderSide(color: AppColors.border),
-            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final dateStr = dateKeys[group.x];
-              final unit = _currentMetric == 'calories' ? 'kcal' : 'g';
-              return BarTooltipItem(
-                '$dateStr\n',
-                TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
-                children: [
-                  TextSpan(
-                    text: '${rod.toY.round()} $unit',
-                    style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w800),
-                  ),
-                  TextSpan(
-                    text: '\nTarget: ${targetValue.round()} $unit',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 10),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -727,7 +799,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: Center(
                     child: Text(
                       hasData ? '${totalGrams.round()}g' : '0g',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textMain),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.textMain),
                     ),
                   ),
                 ),
@@ -759,21 +831,20 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
+            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
           ],
         ),
         Row(
           children: [
-            Text(grams, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+            Text(grams, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
             const SizedBox(width: 6),
-            Text('($pct)', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+            Text('($pct)', style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
           ],
         ),
       ],
     );
   }
 
-  // Redesigned Symmetrical 2-Column Micronutrient Matrix
   Widget _buildMicronutrientCard(_StatsData data) {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -875,8 +946,8 @@ class _StatsScreenState extends State<StatsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(name, style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-              Text(value, style: TextStyle(fontSize: 12, color: AppColors.textMain, fontWeight: FontWeight.w800)),
+              Text(name, style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+              Text(value, style: const TextStyle(fontSize: 12, color: AppColors.textMain, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 6),
@@ -907,11 +978,11 @@ class _StatsScreenState extends State<StatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Row(
+          Row(
             children: [
               Icon(Icons.lightbulb_outline_rounded, size: 18, color: AppColors.primary),
-              SizedBox(width: 8),
-              Text(
+              const SizedBox(width: 8),
+              const Text(
                 'Automated Insights',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
@@ -929,12 +1000,12 @@ class _StatsScreenState extends State<StatsScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.icon, style: TextStyle(fontSize: 16)),
+                      Text(item.icon, style: const TextStyle(fontSize: 16)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           item.text,
-                          style: TextStyle(fontSize: 13, color: AppColors.textMain, height: 1.4, fontWeight: FontWeight.w500),
+                          style: const TextStyle(fontSize: 13, color: AppColors.textMain, height: 1.4, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ],
@@ -945,7 +1016,6 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // Exact calendar range generation (Guarantees exactly 7, 30, or 90 days)
   _StatsData _computeAggregates(List<DailyLog> allLogs, UserProfile profile) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -963,8 +1033,13 @@ class _StatsScreenState extends State<StatsScreen> {
       for (int i = 89; i >= 0; i--) {
         targetDateSequence.add(DateFormat('yyyy-MM-dd').format(today.subtract(Duration(days: i))));
       }
+    } else if (_currentRange == 'custom' && _customStartDate != null && _customEndDate != null) {
+      DateTime cursor = _customStartDate!;
+      while (!cursor.isAfter(_customEndDate!)) {
+        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(cursor));
+        cursor = cursor.add(const Duration(days: 1));
+      }
     } else {
-      // 'all' -> all logged dates sorted
       final loggedDates = allLogs.map((l) => l.date).toSet().toList()..sort();
       if (loggedDates.isNotEmpty) {
         DateTime cursor = DateFormat('yyyy-MM-dd').parse(loggedDates.first);
@@ -978,8 +1053,27 @@ class _StatsScreenState extends State<StatsScreen> {
     }
 
     final Map<String, _DayAggregate> dailyMap = {};
+    final Set<GoalType> distinctGoalTypes = {};
+    double totalWeightedTargetCal = 0;
+    double totalWeightedTargetPro = 0;
+    double totalWeightedTargetCarb = 0;
+    double totalWeightedTargetFat = 0;
+
     for (final k in targetDateSequence) {
-      dailyMap[k] = _DayAggregate();
+      final hist = profile.getTargetForDate(k);
+      distinctGoalTypes.add(hist.goalType);
+
+      dailyMap[k] = _DayAggregate(
+        targetCalories: hist.targetCalories,
+        targetProteinG: hist.targetProteinG,
+        targetCarbsG: hist.targetCarbsG,
+        targetFatG: hist.targetFatG,
+        goalType: hist.goalType,
+      );
+      totalWeightedTargetCal += hist.targetCalories;
+      totalWeightedTargetPro += hist.targetProteinG;
+      totalWeightedTargetCarb += hist.targetCarbsG;
+      totalWeightedTargetFat += hist.targetFatG;
     }
 
     int totalLogsCount = 0;
@@ -1027,6 +1121,7 @@ class _StatsScreenState extends State<StatsScreen> {
     }
 
     final divisor = math.max(1, daysWithData);
+    final totalDaysCount = math.max(1, targetDateSequence.length);
     final Map<String, double> avgMicros = {};
     sumMicros.forEach((k, v) => avgMicros[k] = v / divisor);
 
@@ -1040,6 +1135,11 @@ class _StatsScreenState extends State<StatsScreen> {
       avgMicros: avgMicros,
       dailyDateKeys: targetDateSequence,
       dailyMap: dailyMap,
+      distinctGoalTypes: distinctGoalTypes,
+      effectiveTargetCalories: totalWeightedTargetCal / totalDaysCount,
+      effectiveTargetProtein: totalWeightedTargetPro / totalDaysCount,
+      effectiveTargetCarbs: totalWeightedTargetCarb / totalDaysCount,
+      effectiveTargetFat: totalWeightedTargetFat / totalDaysCount,
     );
   }
 
@@ -1048,7 +1148,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final margin = math.max(100.0, target * 0.05);
 
     if (avg >= target - margin && avg <= target + margin) {
-      return  _StatusInfo('On Track', AppColors.primary);
+      return _StatusInfo('On Track', AppColors.primary);
     }
 
     if (goalOffset > 0) {
@@ -1065,7 +1165,7 @@ class _StatsScreenState extends State<StatsScreen> {
   _StatusInfo _getProteinStatus(double avg, double target, int days) {
     if (days == 0) return const _StatusInfo('No Data', AppColors.textMuted);
     final margin = math.max(10.0, target * 0.10);
-    if (avg >= target - margin) return  _StatusInfo('On Track', AppColors.primary);
+    if (avg >= target - margin) return _StatusInfo('On Track', AppColors.primary);
     return const _StatusInfo('Needs Boost', AppColors.warning);
   }
 
@@ -1073,16 +1173,20 @@ class _StatsScreenState extends State<StatsScreen> {
     if (data.daysWithData < 2) return [];
 
     final list = <_InsightItem>[];
-    final targetCals = profile.targetCalories > 0 ? profile.targetCalories : 2000.0;
-    final targetPro = profile.targetProteinG > 0 ? profile.targetProteinG : 150.0;
+    final targetCals = data.effectiveTargetCalories;
+    final targetPro = data.effectiveTargetProtein;
+
+    if (data.distinctGoalTypes.length > 1) {
+      list.add(const _InsightItem('🔄', 'Multi-phase detected: your statistics and adherence dynamically adapt to each goal transition.'));
+    }
 
     final calDiff = data.avgCalories - targetCals;
     if (calDiff.abs() < targetCals * 0.05) {
       list.add(const _InsightItem('🎯', 'Your average calorie intake is right on target. Excellent consistency!'));
     } else if (calDiff > 0) {
-      list.add(_InsightItem('📈', 'You are averaging ${calDiff.round()} kcal over your daily target. Consider trimming portion multipliers.'));
+      list.add(_InsightItem('📈', 'You are averaging ${calDiff.round()} kcal over your target. Consider trimming portion multipliers.'));
     } else {
-      list.add(_InsightItem('📉', 'You are averaging ${calDiff.abs().round()} kcal below your daily target. Ensure you are meeting minimum energy needs.'));
+      list.add(_InsightItem('📉', 'You are averaging ${calDiff.abs().round()} kcal below your target. Ensure you are meeting minimum energy needs.'));
     }
 
     final proRatio = data.avgProtein / targetPro;
@@ -1128,6 +1232,19 @@ class _DayAggregate {
   double fatG = 0;
   final Map<String, double> micros = {};
   int logCount = 0;
+  final double targetCalories;
+  final double targetProteinG;
+  final double targetCarbsG;
+  final double targetFatG;
+  final GoalType goalType;
+
+  _DayAggregate({
+    this.targetCalories = 2000.0,
+    this.targetProteinG = 150.0,
+    this.targetCarbsG = 200.0,
+    this.targetFatG = 65.0,
+    this.goalType = GoalType.maintain,
+  });
 }
 
 class _StatsData {
@@ -1140,6 +1257,11 @@ class _StatsData {
   final Map<String, double> avgMicros;
   final List<String> dailyDateKeys;
   final Map<String, _DayAggregate> dailyMap;
+  final Set<GoalType> distinctGoalTypes;
+  final double effectiveTargetCalories;
+  final double effectiveTargetProtein;
+  final double effectiveTargetCarbs;
+  final double effectiveTargetFat;
 
   _StatsData({
     required this.daysWithData,
@@ -1151,7 +1273,78 @@ class _StatsData {
     required this.avgMicros,
     required this.dailyDateKeys,
     required this.dailyMap,
+    required this.distinctGoalTypes,
+    required this.effectiveTargetCalories,
+    required this.effectiveTargetProtein,
+    required this.effectiveTargetCarbs,
+    required this.effectiveTargetFat,
   });
+}
+
+class _SteppedTargetLinePainter extends CustomPainter {
+  final List<double> dailyTargets;
+  final double ceiling;
+  final Color color;
+
+  _SteppedTargetLinePainter({
+    required this.dailyTargets,
+    required this.ceiling,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (dailyTargets.isEmpty || ceiling <= 0) return;
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke;
+
+    final count = dailyTargets.length;
+    final stepWidth = size.width / count;
+
+    final path = Path();
+    for (int i = 0; i < count; i++) {
+      final target = dailyTargets[i];
+      final y = (size.height * (1.0 - (target / ceiling))).clamp(0.0, size.height);
+      final startX = i * stepWidth;
+      final endX = (i + 1) * stepWidth;
+
+      if (i == 0) {
+        path.moveTo(startX, y);
+      } else {
+        final prevTarget = dailyTargets[i - 1];
+        if ((prevTarget - target).abs() > 0.5) {
+          path.lineTo(startX, y);
+        }
+      }
+      path.lineTo(endX, y);
+    }
+
+    _drawDashedPath(canvas, path, paint);
+  }
+
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint) {
+    const dashWidth = 5.0;
+    const dashSpace = 4.0;
+    final metrics = path.computeMetrics();
+
+    for (final metric in metrics) {
+      double distance = 0.0;
+      while (distance < metric.length) {
+        final length = math.min(dashWidth, metric.length - distance);
+        final extractPath = metric.extractPath(distance, distance + length);
+        canvas.drawPath(extractPath, paint);
+        distance += dashWidth + dashSpace;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SteppedTargetLinePainter old) {
+    return old.dailyTargets != dailyTargets || old.ceiling != ceiling || old.color != color;
+  }
 }
 
 class _DistributionDonutPainter extends CustomPainter {

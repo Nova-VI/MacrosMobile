@@ -18,7 +18,8 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
   late DateTime _selectedLogDate;
-  String _activePreset = 'all'; // 'week', 'month', 'all', 'custom'
+  String _activePreset = 'month'; // Defaults to 30 days
+  bool _isHistoryExpanded = false; // Collapsed by default
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
@@ -70,7 +71,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
       builder: (context, child) {
         return Theme(
           data: AppTheme.darkTheme.copyWith(
-            colorScheme:  ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: AppColors.primary,
               surface: AppColors.surface,
               onSurface: AppColors.textMain,
@@ -114,7 +115,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
       SnackBar(
         content: Text(
           message,
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
@@ -153,7 +154,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
       return allLogs.where((l) => l.date.compareTo(startKey) >= 0 && l.date.compareTo(endKey) <= 0).toList();
     }
 
-    return allLogs; // 'all'
+    return allLogs;
   }
 
   @override
@@ -170,15 +171,10 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
               physics: const BouncingScrollPhysics(),
               children: [
-                // Island 1: Fast Log Card
                 _buildQuickLogCard(),
                 const SizedBox(height: 14),
-
-                // Island 2: Interactive Chart Card
                 _buildChartCard(filteredLogs),
                 const SizedBox(height: 14),
-
-                // Island 3: History List
                 _buildHistorySection(historyDesc),
               ],
             ),
@@ -222,7 +218,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                       const SizedBox(width: 6),
                       Text(
                         DateFormat('MMM d').format(_selectedLogDate),
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMain),
                       ),
                     ],
                   ),
@@ -238,10 +234,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   controller: _weightInputController,
                   onTap: () => _selectAll(_weightInputController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
+                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
                   decoration:  InputDecoration(
                     labelText: 'Body Weight',
-                    hintText: 'e.g. 74.5',
                     suffixText: 'kg',
                     suffixStyle: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 14),
                   ),
@@ -297,9 +292,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               children: [
-                _buildPresetChip('Week', 'week'),
+                _buildPresetChip('30 Days', 'month'),
                 const SizedBox(width: 8),
-                _buildPresetChip('Month', 'month'),
+                _buildPresetChip('7 Days', 'week'),
                 const SizedBox(width: 8),
                 _buildPresetChip('All Time', 'all'),
                 const SizedBox(width: 8),
@@ -315,14 +310,13 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Line Chart Canvas
           SizedBox(
             height: 200,
             child: logs.length < 2
                 ? Center(
                     child: Text(
                       logs.isEmpty ? 'No weight logs in this period.' : 'Log at least 2 days to render trend line.',
-                      style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                      style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                     ),
                   )
                 : _buildWeightLineChart(logs),
@@ -403,7 +397,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                 if (val == meta.min || val == meta.max) return const SizedBox.shrink();
                 return Text(
                   val.round().toString(),
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
                 );
               },
             ),
@@ -421,7 +415,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     '${d[1]}/${d[2]}',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 );
               },
@@ -432,14 +426,14 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
         lineTouchData: LineTouchData(
           touchTooltipData: LineTouchTooltipData(
             getTooltipColor: (_) => AppColors.surface,
-            tooltipBorder: BorderSide(color: AppColors.border),
+            tooltipBorder: const BorderSide(color: AppColors.border),
             getTooltipItems: (touchedSpots) {
               return touchedSpots.map((spot) {
                 final idx = spot.x.toInt();
                 final dateStr = logs[idx].date;
                 return LineTooltipItem(
                   '$dateStr\n',
-                  TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                  const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
                   children: [
                     TextSpan(
                       text: '${spot.y.toStringAsFixed(1)} kg',
@@ -486,39 +480,77 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   }
 
   Widget _buildHistorySection(List<WeightLog> logs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Log History',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _isHistoryExpanded = !_isHistoryExpanded);
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Log History',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceHover,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${logs.length}',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Text(
+                      _isHistoryExpanded ? 'Collapse' : 'Show',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _isHistoryExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ],
             ),
-            Text(
-              '${logs.length} logged',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
+          ),
 
-        if (logs.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 32),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Center(
-              child: Text('No weight history found for this range.', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-            ),
-          )
-        else
-          ...logs.map((log) => _buildWeightHistoryTile(log)),
-      ],
+          if (_isHistoryExpanded) ...[
+            const SizedBox(height: 12),
+            if (logs.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Text('No weight history found for this range.', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                ),
+              )
+            else
+              ...logs.map((log) => _buildWeightHistoryTile(log)),
+          ],
+        ],
+      ),
     );
   }
 
@@ -528,11 +560,11 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -542,31 +574,31 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
             children: [
               Text(
                 '${log.weightKg.toStringAsFixed(1)} kg',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: -0.3),
+                style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: -0.3),
               ),
               const SizedBox(height: 2),
               Text(
                 dateDisplay,
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.textMuted),
               ),
             ],
           ),
           Row(
             children: [
               IconButton(
-                icon: Icon(Icons.edit_outlined, size: 18, color: AppColors.textMuted),
+                icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
                 splashRadius: 18,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                 onPressed: () => _openEditWeightModal(log),
                 tooltip: 'Edit Log',
               ),
               const SizedBox(width: 4),
               IconButton(
-                icon: Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
                 splashRadius: 18,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                 onPressed: () => _confirmDeleteWeight(log),
                 tooltip: 'Delete Log',
               ),
@@ -584,20 +616,20 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: BorderSide(color: AppColors.border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22), side: const BorderSide(color: AppColors.border)),
         title: const Text('Edit Weight Log', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 17)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Date: ${log.date}', style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+            Text('Date: ${log.date}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
             const SizedBox(height: 14),
             TextField(
               controller: editCtrl,
               onTap: () => _selectAll(editCtrl),
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
+              style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
               decoration: const InputDecoration(labelText: 'Body Weight (kg)'),
             ),
           ],
@@ -609,7 +641,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.border),
+                    side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -632,7 +664,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                       await _firestoreService.setWeightLog(WeightLog(date: log.date, weightKg: newW));
                       HapticFeedback.mediumImpact();
                       _showToast('Weight log updated!');
-                      Navigator.pop(ctx);
+                      if (mounted) Navigator.pop(ctx);
                     }
                   },
                   child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -651,9 +683,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
         title: const Text('Delete Weight Log', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: Text('Are you sure you want to delete the log for ${log.date}?', style: TextStyle(color: AppColors.textMuted)),
+        content: Text('Are you sure you want to delete the log for ${log.date}?', style: const TextStyle(color: AppColors.textMuted)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
@@ -661,7 +693,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.border),
+                    side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

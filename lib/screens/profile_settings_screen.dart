@@ -46,6 +46,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   String _weeklyGoal = '0';
   String _proteinMultiplier = '2.0';
   String _calcMethod = 'calculator';
+  DateTime _goalPhaseStartDate = DateTime.now();
 
   bool _obscureUsda = true;
   bool _obscureGemini = true;
@@ -91,7 +92,23 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       });
     }
 
-    final p = _firestoreService.profileNotifier.value;
+final p = _firestoreService.profileNotifier.value;
+    DateTime phaseStart = DateTime.now();
+
+    if (p.goalHistory.isNotEmpty) {
+      try {
+        phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalHistory.last.date);
+      } catch (_) {}
+    } else {
+      final logs = _firestoreService.logsNotifier.value;
+      final validDates = logs.map((l) => l.date).where((d) => d.isNotEmpty).toList()..sort();
+      if (validDates.isNotEmpty) {
+        try {
+          phaseStart = DateFormat('yyyy-MM-dd').parse(validDates.first);
+        } catch (_) {}
+      }
+    }
+
     setState(() {
       _calcMethod = p.goalMode;
       _ageController.text = p.age.toString();
@@ -101,6 +118,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       _activityLevel = p.activity;
       _weeklyGoal = p.goal;
       _proteinMultiplier = p.proteinMultiplier;
+      _goalPhaseStartDate = phaseStart;
 
       _targetCalController.text = p.targetCalories.round().toString();
       _targetProController.text = p.targetProteinG.round().toString();
@@ -301,6 +319,22 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   Future<void> _saveProfileAndGoals() async {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final currentHistory = List<GoalHistoryEntry>.from(_firestoreService.profileNotifier.value.goalHistory);
+
+    // If changing goal mode, record a new phase entry for today
+    currentHistory.removeWhere((e) => e.date == todayStr);
+    currentHistory.add(
+      GoalHistoryEntry(
+        date: todayStr,
+        targetCalories: double.tryParse(_targetCalController.text) ?? 2000.0,
+        targetProteinG: double.tryParse(_targetProController.text) ?? 150.0,
+        targetCarbsG: double.tryParse(_targetCarbController.text) ?? 200.0,
+        targetFatG: double.tryParse(_targetFatController.text) ?? 65.0,
+        goal: _weeklyGoal,
+      ),
+    );
+
     final payload = UserProfile(
       id: '1',
       goalMode: _calcMethod,
@@ -315,18 +349,18 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       activity: _activityLevel,
       goal: _weeklyGoal,
       proteinMultiplier: _proteinMultiplier,
+      goalHistory: currentHistory,
     );
 
     await _firestoreService.saveProfile(payload);
 
     if (_calcMethod == 'calculator') {
       final w = double.tryParse(_weightController.text) ?? 0.0;
-      final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final existingLogs = _firestoreService.weightLogsNotifier.value;
-      final hasToday = existingLogs.any((l) => l.date == todayKey);
+      final hasToday = existingLogs.any((l) => l.date == todayStr);
 
       if (w > 0 && !hasToday) {
-        await _firestoreService.setWeightLog(WeightLog(date: todayKey, weightKg: w));
+        await _firestoreService.setWeightLog(WeightLog(date: todayStr, weightKg: w));
       }
     }
 
@@ -673,6 +707,42 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 16),
+
+          // Read-only info pill showing current active goal phase
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ACTIVE GOAL PHASE', style: TextStyle(fontSize: 9.5, color: AppColors.textMuted, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+                    const SizedBox(height: 2),
+                    Text('Active since ${DateFormat('MMM d, yyyy').format(_goalPhaseStartDate)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain)),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _weeklyGoal == '0' ? 'MAINTAIN' : (double.tryParse(_weeklyGoal)! > 0 ? 'BULK' : 'CUT'),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
           Row(
             children: [
               Expanded(
@@ -754,6 +824,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             },
           ),
           const SizedBox(height: 16),
+
+          // Target Hero Summary Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(

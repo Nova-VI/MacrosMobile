@@ -28,6 +28,7 @@ class LogFoodScreen extends StatefulWidget {
 }
 
 class _LogFoodScreenState extends State<LogFoodScreen> {
+  final ScrollController _scrollController = ScrollController();
   final _searchController = TextEditingController();
   final _nameController = TextEditingController();
   final _servingSizeController = TextEditingController(text: '100');
@@ -67,11 +68,15 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   bool _isMicrosExpanded = false;
   bool _isSearching = false;
   bool _isLibraryBound = false;
+  bool _isCustomTimeSet = false;
+  bool _isCustomDateSet = false;
+  bool _showFloatingLogButton = false;
 
   FoodItem? _currentBaseFood;
   String? _editingLogId;
 
   Timer? _debounceTimer;
+  Timer? _liveClockTimer;
   List<FoodItem> _localSearchResults = [];
   List<Map<String, dynamic>> _usdaSearchResults = [];
 
@@ -85,6 +90,37 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       _initEditMode(widget.editLog!);
     } else {
       _resetToNewQuickLog();
+    }
+
+    _scrollController.addListener(_updateFloatingButtonVisibility);
+
+    _liveClockTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!_isCustomTimeSet && _editingLogId == null && mounted) {
+        final now = TimeOfDay.now();
+        if (_selectedTime.hour != now.hour || _selectedTime.minute != now.minute) {
+          setState(() {
+            _selectedTime = now;
+            if (!_isCustomDateSet && widget.initialDate == null) {
+              _selectedDate = DateTime.now();
+            }
+          });
+        }
+      }
+    });
+  }
+
+  void _updateFloatingButtonVisibility() {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.position.pixels;
+    final isNearBottom = (maxScroll - currentScroll) < 100;
+
+    // Quick log should NOT have the bubble. Only saved library foods or edit mode show the bubble.
+    final isSavedOrEdit = _isLibraryBound || _editingLogId != null;
+    final shouldShow = isSavedOrEdit && !isNearBottom;
+
+    if (shouldShow != _showFloatingLogButton) {
+      setState(() => _showFloatingLogButton = shouldShow);
     }
   }
 
@@ -108,6 +144,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       _saveToLibrary = false;
       _isManualCalories = false;
       _isLibraryBound = false;
+      _isCustomTimeSet = false;
+      _isCustomDateSet = false;
+      _selectedTime = TimeOfDay.now();
+      _selectedDate = widget.initialDate ?? DateTime.now();
 
       _nameController.clear();
       _servingSizeController.text = '100';
@@ -132,10 +172,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       _calciumController.clear();
       _ironController.clear();
     });
+    _updateFloatingButtonVisibility();
   }
 
   void _initEditMode(DailyLog log) {
     _editingLogId = log.id;
+    _isLibraryBound = true;
     _selectedEmoji = log.emoji.isNotEmpty ? log.emoji : '🍽️';
     _nameController.text = log.foodName;
     _selectedBaseUnit = log.baseUnit;
@@ -181,13 +223,15 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       baseUnit: log.baseUnit,
       servingName: log.servingName,
       emoji: log.emoji,
-      macros: log.macros.scale(1.0 / log.servings),
-      micros: log.micros.scale(1.0 / log.servings),
+      macros: log.macros.scale(1.0 / (log.servings > 0 ? log.servings : 1.0)),
+      micros: log.micros.scale(1.0 / (log.servings > 0 ? log.servings : 1.0)),
     );
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
+    _liveClockTimer?.cancel();
     _debounceTimer?.cancel();
     _searchController.dispose();
     _nameController.dispose();
@@ -257,6 +301,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           _selectedEmoji = '🍽️';
         });
       }
+      _updateFloatingButtonVisibility();
       return;
     }
 
@@ -278,11 +323,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         _currentBaseFood = null;
       });
     }
+    _updateFloatingButtonVisibility();
   }
 
   void _populateFromLibraryItem(FoodItem food, {String? preserveTypedName}) {
     _currentBaseFood = food;
-    _isLibraryBound = food.id.isNotEmpty;
+    _isLibraryBound = true;
     _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
     _selectedBaseUnit = food.baseUnit;
     _servingUnitController.text = food.servingName;
@@ -297,6 +343,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
     _scaleNutrients(1.0);
     setState(() {});
+    _updateFloatingButtonVisibility();
   }
 
   void _selectFoodItem(FoodItem food) {
@@ -342,6 +389,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   }
 
   void _onBaseServingChanged(String val) {
+    if (_isLibraryBound || _editingLogId != null) return;
     final newBase = double.tryParse(val) ?? 100.0;
     final oldBase = _currentBaseFood?.servingSizeG ?? 100.0;
 
@@ -375,6 +423,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     final total = base * mult;
     _totalAmountController.text = (total % 1 == 0) ? total.toInt().toString() : total.toStringAsFixed(1);
     _scaleNutrients(mult);
+    _updateFloatingButtonVisibility();
   }
 
   void _onTotalAmountChanged(String val) {
@@ -384,11 +433,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       final mult = total / base;
       _servingsController.text = (mult % 1 == 0) ? mult.toInt().toString() : mult.toStringAsFixed(2);
       _scaleNutrients(mult);
+      _updateFloatingButtonVisibility();
     }
   }
 
   void _onManualNutrientTyped() {
-    if (_isLibraryBound) return;
+    if (_isLibraryBound && _editingLogId == null) return;
     final mult = double.tryParse(_servingsController.text) ?? 1.0;
     final m = mult > 0 ? mult : 1.0;
 
@@ -406,7 +456,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     }
 
     _currentBaseFood = FoodItem(
-      id: '',
+      id: _editingLogId != null ? (_currentBaseFood?.id ?? '') : '',
       name: _nameController.text.trim(),
       source: 'custom',
       servingSizeG: double.tryParse(_servingSizeController.text) ?? 100.0,
@@ -416,9 +466,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       macros: MacroNutrients(proteinG: p, carbsG: c, fatG: f, calories: cals),
       micros: _getParsedMicros().scale(1.0 / m),
     );
+    _updateFloatingButtonVisibility();
   }
 
   void _openEmojiPicker() {
+    if (_editingLogId != null) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -509,7 +561,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     String finalEmoji = _selectedEmoji;
     bool triggerAiEmoji = (finalEmoji == '🍽️' && name.isNotEmpty);
 
-    // Save to Library if selected
     if (_saveToLibrary && _editingLogId == null && !_isLibraryBound) {
       final libraryItem = FoodItem(
         id: '',
@@ -562,7 +613,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       _showToast('Daily log updated!');
       widget.onLogCompleted();
     } else {
-      // Optimistic 0ms local write - never pauses UI
       final newLogId = await _firestoreService.addLog(logPayload);
       if (triggerAiEmoji) {
         _handleBackgroundAiEmoji(foodId, newLogId, displayName);
@@ -591,7 +641,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       SnackBar(
         content: Text(
           message,
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
@@ -611,36 +661,124 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-          physics: const BouncingScrollPhysics(),
+        child: Stack(
           children: [
-            _buildSearchField(),
-            const SizedBox(height: 12),
+            ListView(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+              physics: const BouncingScrollPhysics(),
+              children: [
+                if (_editingLogId == null) _buildSearchField(),
+                if (_editingLogId == null) const SizedBox(height: 12),
 
-            if (_localSearchResults.isNotEmpty || _usdaSearchResults.isNotEmpty || _isSearching)
-              _buildSearchResultsTray(),
+                if (_localSearchResults.isNotEmpty || _usdaSearchResults.isNotEmpty || _isSearching)
+                  _buildSearchResultsTray(),
 
-            if (_editingLogId == null && (favorites.isNotEmpty || frequents.isNotEmpty)) ...[
-              _buildShortcutsSection(favorites, frequents),
-              const SizedBox(height: 14),
-            ],
+                if (_editingLogId == null && (favorites.isNotEmpty || frequents.isNotEmpty)) ...[
+                  _buildShortcutsSection(favorites, frequents),
+                  const SizedBox(height: 14),
+                ],
 
-            // Island 1: Food & Identity Card (Glowing on match)
-            _buildFoodIdentityCard(),
-            const SizedBox(height: 14),
+                // Island 1: Food & Identity Card (Clean label in edit mode)
+                _buildFoodIdentityCard(),
+                const SizedBox(height: 14),
 
-            // Island 2: Portion & Scaling Island (Dynamic Lock / Edit View)
-            _buildPortionCard(),
-            const SizedBox(height: 14),
+                // Island 2: Portion & Scaling Island
+                _buildPortionCard(),
+                const SizedBox(height: 14),
 
-            // Island 3: Macronutrients Card
-            _buildNutritionCard(),
-            const SizedBox(height: 14),
+                // Island 3: Macronutrients Card
+                _buildNutritionCard(),
+                const SizedBox(height: 14),
 
-            // Island 4: Actions & Options Card
-            _buildActionsCard(),
+                // Island 4: Actions & Options Card
+                _buildActionsCard(),
+              ],
+            ),
+
+            // Floating Quick Log Bubble (Only for saved/search foods and edit mode)
+            if (_showFloatingLogButton)
+              Positioned(
+                bottom: 24,
+                left: 20,
+                right: 20,
+                child: _buildFloatingLogBubble(),
+              ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingLogBubble() {
+    final isEditing = _editingLogId != null;
+    final cals = _caloriesController.text.isNotEmpty ? _caloriesController.text : '0';
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      builder: (context, val, child) {
+        return Transform.scale(
+          scale: 0.9 + (0.1 * val),
+          child: Opacity(opacity: val, child: child),
+        );
+      },
+      child: Material(
+        color: Colors.transparent,
+        elevation: 8,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: _submitLog,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(_selectedEmoji, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 10),
+                    Text(
+                      isEditing ? 'Update Entry' : 'Log Food',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$cals kcal',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -656,10 +794,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
-        style: TextStyle(color: AppColors.textMain),
+        onTap: () => _selectAll(_searchController),
+        style: const TextStyle(color: AppColors.textMain),
         decoration: InputDecoration(
           hintText: 'Search foods (e.g. Chicken breast)...',
-          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
+          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
           suffixIcon: _isSearching
               ?  Padding(
                   padding: EdgeInsets.all(12),
@@ -671,7 +810,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                 )
               : _searchController.text.isNotEmpty
                   ? IconButton(
-                      icon: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                      icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
                       onPressed: () {
                         _searchController.clear();
                         _onSearchChanged('');
@@ -736,12 +875,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     return ListTile(
       dense: true,
       onTap: onTap,
-      leading: Text(emoji, style: TextStyle(fontSize: 18)),
+      leading: Text(emoji, style: const TextStyle(fontSize: 18)),
       title: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13.5),
+        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13.5),
       ),
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -770,7 +909,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       children: [
         Text(
           title,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.4),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -796,11 +935,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(item.emoji.isNotEmpty ? item.emoji : '🍽️', style: TextStyle(fontSize: 15)),
+                      Text(item.emoji.isNotEmpty ? item.emoji : '🍽️', style: const TextStyle(fontSize: 15)),
                       const SizedBox(width: 6),
                       Text(
                         item.name,
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textMain),
                       ),
                     ],
                   ),
@@ -813,110 +952,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 1: Food & Identity Card (Glowing on match)
+  // Island 1: Food & Identity Card (Simple clean label when editing)
   Widget _buildFoodIdentityCard() {
-    final headerTitle = _editingLogId != null
-        ? 'Edit Daily Log'
-        : (_isLibraryBound ? 'Saved Food' : 'Quick Log');
+    final isEditMode = _editingLogId != null;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: _isLibraryBound ? AppColors.primary : AppColors.border,
-          width: _isLibraryBound ? 1.5 : 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    headerTitle,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: _isLibraryBound ? AppColors.primary : AppColors.textMain,
-                    ),
-                  ),
-                  if (_isLibraryBound) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child:  Text(
-                        'Library',
-                        style: TextStyle(color: AppColors.primary, fontSize: 10.5, fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              Row(
-                children: [
-                  _buildPillDatePicker(),
-                  const SizedBox(width: 6),
-                  _buildPillTimePicker(),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              InkWell(
-                onTap: _openEmojiPicker,
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _isLibraryBound ? AppColors.primary.withValues(alpha: 0.5) : AppColors.border),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(_selectedEmoji, style: TextStyle(fontSize: 26)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _nameController,
-                  onChanged: _onFoodNameChanged,
-                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
-                  decoration: InputDecoration(
-                    labelText: 'Food Name',
-                    hintText: 'e.g. Scrambled Eggs',
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(
-                        color: _isLibraryBound ? AppColors.primary : AppColors.primary,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Island 2: Portion & Serving Definition (Swaps into locked pill when library food is loaded)
-  Widget _buildPortionCard() {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -930,51 +969,129 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'PORTION & SERVINGS',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
+              Text(
+                isEditMode ? 'Edit Entry' : (_isLibraryBound ? 'Saved Food' : 'Quick Log'),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textMain,
+                ),
               ),
-              if (_isLibraryBound)
+              Row(
+                children: [
+                  _buildPillDatePicker(),
+                  const SizedBox(width: 6),
+                  _buildPillTimePicker(),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // In edit mode: show a simple, sleek text label without disabled text boxes
+          if (isEditMode) ...[
+            Row(
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
                   ),
-                  child:  Text(
-                    'From library',
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.primary),
+                  alignment: Alignment.center,
+                  child: Text(_selectedEmoji, style: const TextStyle(fontSize: 24)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _nameController.text,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textMain,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Base serving: ${_servingSizeController.text}$_selectedBaseUnit ${_servingUnitController.text.isNotEmpty ? '(${_servingUnitController.text})' : ''}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-            ],
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                InkWell(
+                  onTap: _openEmojiPicker,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(_selectedEmoji, style: const TextStyle(fontSize: 26)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _nameController,
+                    onTap: () => _selectAll(_nameController),
+                    onChanged: _onFoodNameChanged,
+                    style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                    decoration: const InputDecoration(
+                      labelText: 'Food Name',
+                      hintText: 'e.g. Scrambled Eggs',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Island 2: Portion & Scaling Card (Clean and simple)
+  Widget _buildPortionCard() {
+    final isEditMode = _editingLogId != null;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'PORTION & SERVINGS',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
           ),
           const SizedBox(height: 12),
 
-          // If Library Food: Show Clean Locked Base Summary Pill
-          if (_isLibraryBound) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Base serving: ${_currentBaseFood?.servingSizeG.round()}${_selectedBaseUnit} ${_servingUnitController.text.isNotEmpty ? '(${_servingUnitController.text})' : ''}',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ] else ...[
-            // Editable Base Definition for Custom Quick Logs
+          // For custom quick log, allow defining base serving. For saved food or edit mode, only show the multiplier & total.
+          if (!isEditMode && !_isLibraryBound) ...[
             Row(
               children: [
                 Expanded(
@@ -984,7 +1101,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     onTap: () => _selectAll(_servingSizeController),
                     onChanged: _onBaseServingChanged,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
                     decoration: const InputDecoration(labelText: 'Base Serving'),
                   ),
                 ),
@@ -1004,8 +1121,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                       child: DropdownButton<String>(
                         value: _selectedBaseUnit,
                         dropdownColor: AppColors.surface,
-                        icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
-                        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
+                        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _selectedBaseUnit = val);
@@ -1027,7 +1144,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               controller: _servingUnitController,
               onTap: () => _selectAll(_servingUnitController),
               onChanged: (_) => _onManualNutrientTyped(),
-              style: TextStyle(color: AppColors.textMain),
+              style: const TextStyle(color: AppColors.textMain),
               decoration: const InputDecoration(
                 labelText: 'Serving Unit Name (optional)',
                 hintText: 'e.g. slice, cup, portion',
@@ -1036,7 +1153,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
             const SizedBox(height: 12),
           ],
 
-          // Synchronized Multiplier & Total Amount Row
+          // Multiplier & Total Amount Row
           Row(
             children: [
               Expanded(
@@ -1045,7 +1162,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   onTap: () => _selectAll(_servingsController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: _onServingsChanged,
-                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
                   decoration: const InputDecoration(labelText: 'Servings Multiplier'),
                 ),
               ),
@@ -1056,8 +1173,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   onTap: () => _selectAll(_totalAmountController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: _onTotalAmountChanged,
-                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
-                  decoration: InputDecoration(labelText: 'Total (${_selectedBaseUnit})'),
+                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+                  decoration: InputDecoration(labelText: 'Total ($_selectedBaseUnit)'),
                 ),
               ),
             ],
@@ -1067,7 +1184,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 3: Macronutrients & Micronutrients Card
   Widget _buildNutritionCard() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1091,11 +1207,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _buildMacroField('Carbs (g)', _carbsController, AppColors.carbs),
+                child: _buildMacroField('Carbs (g)', _carbsController, AppColors.secondary),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _buildMacroField('Fat (g)', _fatController, AppColors.fat),
+                child: _buildMacroField('Fat (g)', _fatController, AppColors.warning),
               ),
             ],
           ),
@@ -1108,7 +1224,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               setState(() => _isManualCalories = v.isNotEmpty);
               _onManualNutrientTyped();
             },
-            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+            style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Calories (kcal)',
               suffixIcon: _isManualCalories
@@ -1127,7 +1243,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Micronutrients Expander
           InkWell(
             onTap: () => setState(() => _isMicrosExpanded = !_isMicrosExpanded),
             borderRadius: BorderRadius.circular(10),
@@ -1140,10 +1255,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     color: AppColors.primary,
                     size: 20,
                   ),
-                   SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   Text(
                     _isMicrosExpanded ? 'Hide Micronutrients' : 'Show Micronutrients',
-                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                    style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                 ],
               ),
@@ -1159,7 +1274,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 4: Actions & Options Card
   Widget _buildActionsCard() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1190,7 +1304,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                 Expanded(
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: AppColors.border),
+                      side: const BorderSide(color: AppColors.border),
                       foregroundColor: AppColors.textMain,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1221,7 +1335,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       onTap: () => _selectAll(controller),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (_) => _onManualNutrientTyped(),
-      style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
+      style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: color.withValues(alpha: 0.9), fontWeight: FontWeight.w600, fontSize: 12),
@@ -1298,7 +1412,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       onTap: () => _selectAll(ctrl),
       onChanged: (_) => _onManualNutrientTyped(),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(color: AppColors.textMain, fontSize: 13),
+      style: const TextStyle(color: AppColors.textMain, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -1316,7 +1430,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           firstDate: DateTime(2020),
           lastDate: DateTime(2035),
         );
-        if (picked != null) setState(() => _selectedDate = picked);
+        if (picked != null) {
+          setState(() {
+            _selectedDate = picked;
+            _isCustomDateSet = true;
+          });
+        }
       },
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -1328,7 +1447,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         ),
         child: Text(
           DateFormat('MMM d').format(_selectedDate),
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
         ),
       ),
     );
@@ -1342,7 +1461,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           context: context,
           initialTime: _selectedTime,
         );
-        if (picked != null) setState(() => _selectedTime = picked);
+        if (picked != null) {
+          setState(() {
+            _selectedTime = picked;
+            _isCustomTimeSet = true;
+          });
+        }
       },
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -1354,7 +1478,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         ),
         child: Text(
           _selectedTime.format(context),
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
         ),
       ),
     );

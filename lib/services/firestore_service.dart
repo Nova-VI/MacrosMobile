@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
 import '../models/daily_log.dart';
@@ -84,6 +85,9 @@ class FirestoreService {
           .toList();
       logs.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
       logsNotifier.value = logs;
+
+      // Automatically backfill goal history for older accounts using the earliest log
+      _checkAndBackfillGoalHistory(uid, profileNotifier.value, logs);
     });
     _subscriptions.add(logSub);
 
@@ -111,10 +115,59 @@ class FirestoreService {
         .snapshots()
         .listen((doc) {
       if (doc.exists && doc.data() != null) {
-        profileNotifier.value = UserProfile.fromFirestore(doc.data());
+        final profile = UserProfile.fromFirestore(doc.data());
+        profileNotifier.value = profile;
+
+        // Check if backfill is needed when profile updates
+        _checkAndBackfillGoalHistory(uid, profile, logsNotifier.value);
       }
     });
     _subscriptions.add(profileSub);
+  }
+
+  /// Automatically backfills goal history for older accounts starting at their earliest log date
+ void _checkAndBackfillGoalHistory(String uid, UserProfile profile, List<DailyLog> logs) async {
+    if (profile.goalHistory.isEmpty && logs.isNotEmpty) {
+      final validDates = logs.map((l) => l.date).where((d) => d.isNotEmpty).toList()..sort();
+      if (validDates.isNotEmpty) {
+        final earliestDate = validDates.first;
+
+        // Uses your account's exact configured goals without any assumptions
+        final initialEntry = GoalHistoryEntry(
+          date: earliestDate,
+          targetCalories: profile.targetCalories,
+          targetProteinG: profile.targetProteinG,
+          targetCarbsG: profile.targetCarbsG,
+          targetFatG: profile.targetFatG,
+          goal: profile.goal,
+        );
+
+        final updatedProfile = UserProfile(
+          id: profile.id,
+          goalMode: profile.goalMode,
+          targetCalories: profile.targetCalories,
+          targetProteinG: profile.targetProteinG,
+          targetCarbsG: profile.targetCarbsG,
+          targetFatG: profile.targetFatG,
+          age: profile.age,
+          gender: profile.gender,
+          height: profile.height,
+          weight: profile.weight,
+          activity: profile.activity,
+          goal: profile.goal,
+          proteinMultiplier: profile.proteinMultiplier,
+          goalHistory: [initialEntry],
+        );
+
+        profileNotifier.value = updatedProfile;
+
+        // Persist to Firestore
+        _db.collection('users').doc(uid).collection('profile').doc('1').set(
+          updatedProfile.toMap(),
+          SetOptions(merge: true),
+        );
+      }
+    }
   }
 
   void cancelListeners() {
@@ -123,14 +176,11 @@ class FirestoreService {
     }
     _subscriptions.clear();
 
-    // Reset notifiers to clean initial states
     logsNotifier.value = [];
     foodsNotifier.value = [];
     weightLogsNotifier.value = [];
     profileNotifier.value = UserProfile();
   }
-
-  // --- In-Memory Fast Filters (0ms) ---
 
   List<DailyLog> getLogsForDate(String date) {
     return logsNotifier.value.where((log) => log.date == date).toList();
@@ -153,8 +203,6 @@ class FirestoreService {
     nonFavorites.sort((a, b) => (counts[b.id] ?? 0).compareTo(counts[a.id] ?? 0));
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
-
-  // --- Optimistic Local Writes ---
 
   Future<String> addLog(DailyLog log) async {
     final ref = _db.collection('users').doc(_uid).collection('logs').doc();
@@ -196,8 +244,40 @@ class FirestoreService {
   }
 
   Future<void> saveProfile(UserProfile profile) async {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final currentHistory = List<GoalHistoryEntry>.from(profileNotifier.value.goalHistory);
+
+    currentHistory.removeWhere((e) => e.date == todayStr);
+    currentHistory.add(
+      GoalHistoryEntry(
+        date: todayStr,
+        targetCalories: profile.targetCalories,
+        targetProteinG: profile.targetProteinG,
+        targetCarbsG: profile.targetCarbsG,
+        targetFatG: profile.targetFatG,
+        goal: profile.goal,
+      ),
+    );
+
+    final updatedProfile = UserProfile(
+      id: profile.id,
+      goalMode: profile.goalMode,
+      targetCalories: profile.targetCalories,
+      targetProteinG: profile.targetProteinG,
+      targetCarbsG: profile.targetCarbsG,
+      targetFatG: profile.targetFatG,
+      age: profile.age,
+      gender: profile.gender,
+      height: profile.height,
+      weight: profile.weight,
+      activity: profile.activity,
+      goal: profile.goal,
+      proteinMultiplier: profile.proteinMultiplier,
+      goalHistory: currentHistory,
+    );
+
     _db.collection('users').doc(_uid).collection('profile').doc('1').set(
-      profile.toMap(),
+      updatedProfile.toMap(),
       SetOptions(merge: true),
     );
   }
