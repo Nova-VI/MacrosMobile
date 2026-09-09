@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,7 +28,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final AuthService _authService = AuthService();
 
-  // Calculator Form Controllers
   DateTime _birthDate = DateTime(2001, 1, 1);
   final _heightController = TextEditingController(text: '175');
   final _targetCalController = TextEditingController();
@@ -37,7 +35,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final _targetCarbController = TextEditingController();
   final _targetFatController = TextEditingController();
 
-  // API Key Controllers
   final _usdaKeyController = TextEditingController();
   final _geminiKeyController = TextEditingController();
 
@@ -225,7 +222,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         builder: (_) => const WeightTrackerScreen(autoEditLatest: true),
       ),
     ).then((_) {
-      // Refresh calculations on return
       if (mounted) {
         _performLiveCalculations();
       }
@@ -720,7 +716,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Active Goal Phase Pill
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
@@ -768,7 +763,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Birthdate Picker Tile (Automatic Age)
               _buildBirthDatePicker(),
               const SizedBox(height: 12),
 
@@ -778,7 +772,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     child: _buildBiometricInput('Height', _heightController, 'cm'),
                   ),
                   const SizedBox(width: 8),
-                  // Read-Only Weight Display with Tap-to-Edit Route
                   Expanded(
                     child: _buildReadOnlyWeightTile(currentWeight),
                   ),
@@ -825,10 +818,17 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 label: 'Protein Target Preference',
                 value: _proteinMultiplier,
                 items: const [
+                  DropdownMenuItem(value: '1.2', child: Text('Minimum (1.2g / kg)')),
+                  DropdownMenuItem(value: '1.4', child: Text('Low (1.4g / kg)')),
+                  DropdownMenuItem(value: '1.6', child: Text('Moderate (1.6g / kg)')),
+                  DropdownMenuItem(value: '1.7', child: Text('Standard (1.7g / kg)')),
+                  DropdownMenuItem(value: '1.8', child: Text('Active (1.8g / kg)')),
+                  DropdownMenuItem(value: '2.0', child: Text('Optimal (2.0g / kg)')),
                   DropdownMenuItem(value: '2.2', child: Text('High Protein (2.2g / kg)')),
-                  DropdownMenuItem(value: '2.0', child: Text('Moderate Protein (2.0g / kg)')),
-                  DropdownMenuItem(value: '1.7', child: Text('Lower Protein (1.7g / kg)')),
-                  DropdownMenuItem(value: '1.2', child: Text('Minimum Protein (1.2g / kg)')),
+                  DropdownMenuItem(value: '2.4', child: Text('Intense (2.4g / kg)')),
+                  DropdownMenuItem(value: '2.6', child: Text('Bodybuilding (2.6g / kg)')),
+                  DropdownMenuItem(value: '2.8', child: Text('Very High (2.8g / kg)')),
+                  DropdownMenuItem(value: '3.0', child: Text('Maximum (3.0g / kg)')),
                 ],
                 onChanged: (val) {
                   if (val != null) {
@@ -839,7 +839,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Target Summary Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -1072,7 +1071,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary.withValues(alpha: 0.18) : AppColors.background,
           borderRadius: BorderRadius.circular(14),
@@ -1146,6 +1145,18 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     required List<DropdownMenuItem<String>> items,
     required ValueChanged<String?> onChanged,
   }) {
+    final safeItems = List<DropdownMenuItem<String>>.from(items);
+    final exists = safeItems.any((item) => item.value == value);
+    if (!exists && value.isNotEmpty) {
+      safeItems.insert(
+        0,
+        DropdownMenuItem(
+          value: value,
+          child: Text('$value (Custom)'),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
@@ -1165,7 +1176,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 18),
               style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13),
               onChanged: onChanged,
-              items: items,
+              items: safeItems,
             ),
           ),
         ],
@@ -1272,7 +1283,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ),
           const SizedBox(height: 14),
 
-          // USDA API Key
           TextField(
             controller: _usdaKeyController,
             onTap: () => _selectAll(_usdaKeyController),
@@ -1302,7 +1312,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Gemini API Key
           TextField(
             controller: _geminiKeyController,
             onTap: () => _selectAll(_geminiKeyController),
