@@ -122,6 +122,12 @@ class FirestoreService {
       sub.cancel();
     }
     _subscriptions.clear();
+
+    // Reset notifiers to clean initial states
+    logsNotifier.value = [];
+    foodsNotifier.value = [];
+    weightLogsNotifier.value = [];
+    profileNotifier.value = UserProfile();
   }
 
   // --- In-Memory Fast Filters (0ms) ---

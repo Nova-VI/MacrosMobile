@@ -154,6 +154,34 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     });
   }
 
+  void _onManualMacroChanged() {
+    final p = double.tryParse(_targetProController.text) ?? 0.0;
+    final c = double.tryParse(_targetCarbController.text) ?? 0.0;
+    final f = double.tryParse(_targetFatController.text) ?? 0.0;
+    final cals = (p * 4) + (c * 4) + (f * 9);
+
+    setState(() {
+      _targetCalController.text = cals.round().toString();
+    });
+  }
+
+  void _onManualCalorieChanged(String val) {
+    final cals = double.tryParse(val) ?? 0.0;
+    if (cals > 0) {
+      final weight = double.tryParse(_weightController.text) ?? 70.0;
+      final proteinFactor = double.tryParse(_proteinMultiplier) ?? 2.0;
+      final protein = (weight * proteinFactor).round();
+      final fat = ((cals * 0.25) / 9).round();
+      final carbs = ((cals - (protein * 4) - (fat * 9)) / 4).round().clamp(0, 9999);
+
+      setState(() {
+        _targetProController.text = protein.toString();
+        _targetCarbController.text = carbs.toString();
+        _targetFatController.text = fat.toString();
+      });
+    }
+  }
+
   Future<void> _pickAndUploadAvatar() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
@@ -216,6 +244,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         content: TextField(
           controller: nameController,
           autofocus: true,
+          onTap: () => _selectAll(nameController),
           style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700),
           decoration: const InputDecoration(
             labelText: 'Your Name or Nickname',
@@ -261,17 +290,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   void _handleNameSave(String rawNewName, String currentName, BuildContext dialogContext) {
-    // 1. Immediately dismiss dialog without waiting
     Navigator.pop(dialogContext);
     HapticFeedback.selectionClick();
 
     final trimmed = rawNewName.trim();
     if (trimmed.isEmpty || trimmed == currentName.trim()) return;
 
-    // 2. Optimistic local cache & background sync
     _authService.updateDisplayName(trimmed);
-
-    // 3. Immediately show notification toast
     _showToast('Name updated to "$trimmed"');
   }
 
@@ -774,6 +799,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             child: TextField(
                               controller: _targetCalController,
                               onTap: () => _selectAll(_targetCalController),
+                              onChanged: _onManualCalorieChanged,
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.right,
                               style: TextStyle(
@@ -984,6 +1010,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   child: TextField(
                     controller: controller,
                     onTap: () => _selectAll(controller),
+                    onChanged: (_) => _onManualMacroChanged(),
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -1058,6 +1085,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           // USDA API Key
           TextField(
             controller: _usdaKeyController,
+            onTap: () => _selectAll(_usdaKeyController),
             obscureText: _obscureUsda,
             style: const TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
@@ -1087,6 +1115,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           // Gemini API Key
           TextField(
             controller: _geminiKeyController,
+            onTap: () => _selectAll(_geminiKeyController),
             obscureText: _obscureGemini,
             style: const TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(

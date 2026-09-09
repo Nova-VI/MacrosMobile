@@ -7,13 +7,14 @@ import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_navigation_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
   await AuthService().initialize();
-  await ThemeManager.init(); // Load user's saved colors before drawing screen
+  await ThemeManager.init();
 
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
@@ -33,7 +34,6 @@ class MacroTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Listens to ThemeManager.notifier and rebuilds app instantly on color change
     return ValueListenableBuilder<int>(
       valueListenable: ThemeManager.notifier,
       builder: (context, _, __) {
@@ -52,7 +52,30 @@ class MacroTrackerApp extends StatelessWidget {
                 );
               }
               if (snapshot.hasData && snapshot.data != null) {
-                return const MainNavigationScreen();
+                final uid = snapshot.data!.uid;
+
+                return FutureBuilder<bool>(
+                  future: AuthService().checkIsOnboardingCompleted(uid),
+                  builder: (context, onboardingSnap) {
+                    if (onboardingSnap.connectionState == ConnectionState.waiting) {
+                      return Scaffold(
+                        body: Center(
+                          child: CircularProgressIndicator(color: AppColors.primary),
+                        ),
+                      );
+                    }
+
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: AuthService.onboardingCompletedNotifier,
+                      builder: (context, isCompleted, _) {
+                        if (isCompleted) {
+                          return const MainNavigationScreen();
+                        }
+                        return const OnboardingScreen();
+                      },
+                    );
+                  },
+                );
               }
               return const AuthScreen();
             },
