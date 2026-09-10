@@ -11,6 +11,8 @@ import '../services/gemini_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/emoji_picker_sheet.dart';
 import '../widgets/barcode_scanner_sheet.dart';
+import '../widgets/ai_meal_prompt_sheet.dart';
+import 'profile_settings_screen.dart';
 
 class LogFoodScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -274,6 +276,154 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         _showToast(message, isError: true);
       },
     );
+  }
+
+  Future<void> _openAiMealPrompt() async {
+    HapticFeedback.lightImpact();
+
+    final apiKey = await GeminiService.getApiKey();
+    if (!mounted) return;
+
+    if (apiKey.isEmpty) {
+      _showApiKeyRequiredDialog();
+      return;
+    }
+
+    AiMealPromptSheet.show(
+      context,
+      onMealParsed: (parsedFood) {
+        _populateFromAiAnalysis(parsedFood);
+      },
+      onError: (errorMessage) {
+        _showToast(errorMessage, isError: true);
+      },
+    );
+  }
+
+  void _showApiKeyRequiredDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text(
+          'Gemini API Key Required',
+          style: TextStyle(
+            color: AppColors.textMain,
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+          ),
+        ),
+        content: const Text(
+          'To use AI meal analysis, please add a free Gemini API key in your Profile Settings.',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.4),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: AppColors.textMain,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ProfileSettingsScreen()),
+                    );
+                  },
+                  child: const Text('Open Settings', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _populateFromAiAnalysis(FoodItem food) {
+    _editingLogId = null;
+    _isLibraryBound = false;
+    _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
+    _selectedBaseUnit = food.baseUnit;
+    _nameController.text = food.name;
+    _servingUnitController.text = food.servingName;
+
+    final baseG = (food.servingSizeG > 0) ? food.servingSizeG : 100.0;
+    _servingSizeController.text = (baseG % 1 == 0)
+        ? baseG.toInt().toString()
+        : baseG.toStringAsFixed(1);
+    _servingsController.text = '1';
+    _totalAmountController.text = _servingSizeController.text;
+
+    final pro = food.macros.proteinG;
+    final carb = food.macros.carbsG;
+    final fat = food.macros.fatG;
+    final dynamicCalories = (pro * 4.0) + (carb * 4.0) + (fat * 9.0);
+
+    _proteinController.text = pro > 0 ? pro.toStringAsFixed(1) : '';
+    _carbsController.text = carb > 0 ? carb.toStringAsFixed(1) : '';
+    _fatController.text = fat > 0 ? fat.toStringAsFixed(1) : '';
+    _caloriesController.text = dynamicCalories > 0 ? dynamicCalories.round().toString() : '';
+
+    final mic = food.micros;
+    _fiberController.text = mic.fiberG > 0 ? mic.fiberG.toStringAsFixed(1) : '';
+    _sugarController.text = mic.sugarG > 0 ? mic.sugarG.toStringAsFixed(1) : '';
+    _sodiumController.text = mic.sodiumMg > 0 ? mic.sodiumMg.round().toString() : '';
+    _satFatController.text = mic.saturatedFatG > 0 ? mic.saturatedFatG.toStringAsFixed(1) : '';
+    _cholesterolController.text = mic.cholesterolMg > 0 ? mic.cholesterolMg.round().toString() : '';
+    _potassiumController.text = mic.potassiumMg > 0 ? mic.potassiumMg.round().toString() : '';
+    _vitAController.text = mic.vitaminAUg > 0 ? mic.vitaminAUg.round().toString() : '';
+    _vitCController.text = mic.vitaminCMg > 0 ? mic.vitaminCMg.toStringAsFixed(1) : '';
+    _vitDController.text = mic.vitaminDUg > 0 ? mic.vitaminDUg.toStringAsFixed(1) : '';
+    _calciumController.text = mic.calciumMg > 0 ? mic.calciumMg.round().toString() : '';
+    _ironController.text = mic.ironMg > 0 ? mic.ironMg.toStringAsFixed(1) : '';
+
+    _currentBaseFood = FoodItem(
+      id: '',
+      name: food.name,
+      source: 'custom',
+      servingSizeG: baseG,
+      baseUnit: food.baseUnit,
+      servingName: food.servingName,
+      emoji: _selectedEmoji,
+      macros: MacroNutrients(
+        proteinG: pro,
+        carbsG: carb,
+        fatG: fat,
+        calories: dynamicCalories,
+      ),
+      micros: mic,
+    );
+
+    _showToast('Loaded "${food.name}" into Quick Log');
+    setState(() {});
+    _updateFloatingButtonVisibility();
   }
 
   void _populateFromScannedFood(FoodItem food, {bool isUnreliable = false}) {
@@ -975,10 +1125,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               filled: true,
               fillColor: AppColors.surface,
               isDense: true,
-              hintText: 'Search foods (e.g. Chicken breast)...',
+              hintText: 'Search foods...',
               prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
               suffixIcon: _isSearching
-                  ? Padding(
+                  ?  Padding(
                       padding: EdgeInsets.all(12),
                       child: SizedBox(
                         width: 16,
@@ -988,7 +1138,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     )
                   : _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                          icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
                           onPressed: () {
                             _searchController.clear();
                             _onSearchChanged('');
@@ -1011,13 +1161,13 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         InkWell(
           onTap: _openBarcodeScanner,
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            width: 50,
-            height: 50,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(20),
@@ -1029,6 +1179,29 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
             alignment: Alignment.center,
             child: Icon(
               Icons.qr_code_scanner_rounded,
+              color: AppColors.primary,
+              size: 22,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        InkWell(
+          onTap: _openAiMealPrompt,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.45),
+                width: 1.2,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.auto_awesome_rounded,
               color: AppColors.primary,
               size: 22,
             ),
@@ -1447,7 +1620,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               setState(() => _isManualCalories = v.isNotEmpty);
               _onManualNutrientTyped();
             },
-            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+            style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Calories (kcal)',
               suffixIcon: _isManualCalories
@@ -1482,7 +1655,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     size: 20,
                   ),
                   const SizedBox(width: 4),
-                  Text(
+                   Text(
                     'Hide Micronutrients',
                     style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
