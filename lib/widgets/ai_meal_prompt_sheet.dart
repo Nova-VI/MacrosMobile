@@ -5,20 +5,23 @@ import '../services/gemini_service.dart';
 import '../theme/app_theme.dart';
 
 typedef AiMealParsedCallback = void Function(FoodItem food);
-typedef AiMealErrorCallback = void Function(String message);
+typedef AiMealErrorCallback = void Function(String message, String lastPrompt);
 
 class AiMealPromptSheet extends StatefulWidget {
+  final String initialText;
   final AiMealParsedCallback onMealParsed;
   final AiMealErrorCallback onError;
 
   const AiMealPromptSheet({
     super.key,
+    this.initialText = '',
     required this.onMealParsed,
     required this.onError,
   });
 
   static Future<void> show(
     BuildContext context, {
+    String initialText = '',
     required AiMealParsedCallback onMealParsed,
     required AiMealErrorCallback onError,
   }) {
@@ -27,6 +30,7 @@ class AiMealPromptSheet extends StatefulWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AiMealPromptSheet(
+        initialText: initialText,
         onMealParsed: onMealParsed,
         onError: onError,
       ),
@@ -38,13 +42,29 @@ class AiMealPromptSheet extends StatefulWidget {
 }
 
 class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
-  final TextEditingController _inputController = TextEditingController();
+  late final TextEditingController _inputController;
   final TextEditingController _clarificationController = TextEditingController();
 
   bool _isProcessing = false;
   bool _isClarificationMode = false;
   String _initialPromptCache = '';
   List<String> _activeQuestions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _inputController = TextEditingController(text: widget.initialText);
+    _initialPromptCache = widget.initialText;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_inputController.text.isNotEmpty && mounted) {
+        _inputController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _inputController.text.length,
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -110,7 +130,6 @@ class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
       return;
     }
 
-    // Abort and report error immediately
     HapticFeedback.lightImpact();
     Navigator.pop(context);
 
@@ -134,7 +153,7 @@ class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
         break;
     }
 
-    widget.onError(message);
+    widget.onError(message, _initialPromptCache);
   }
 
   @override
@@ -183,7 +202,12 @@ class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  if (_inputController.text.trim().isNotEmpty) {
+                    widget.onError('', _inputController.text.trim());
+                  }
+                  Navigator.pop(context);
+                },
               ),
             ],
           ),

@@ -75,6 +75,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   bool _isCustomDateSet = false;
   bool _showFloatingLogButton = false;
 
+  String _lastAiPromptDraft = '';
+
   FoodItem? _currentBaseFood;
   String? _editingLogId;
 
@@ -291,11 +293,16 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
     AiMealPromptSheet.show(
       context,
+      initialText: _lastAiPromptDraft,
       onMealParsed: (parsedFood) {
+        _lastAiPromptDraft = '';
         _populateFromAiAnalysis(parsedFood);
       },
-      onError: (errorMessage) {
-        _showToast(errorMessage, isError: true);
+      onError: (errorMessage, lastPrompt) {
+        _lastAiPromptDraft = lastPrompt;
+        if (errorMessage.isNotEmpty) {
+          _showToast(errorMessage, isError: true);
+        }
       },
     );
   }
@@ -1177,7 +1184,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               ),
             ),
             alignment: Alignment.center,
-            child: Icon(
+            child:  Icon(
               Icons.qr_code_scanner_rounded,
               color: AppColors.primary,
               size: 22,
@@ -1631,7 +1638,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                         color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
+                      child:  Text(
                         '✎ manual',
                         style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
@@ -1837,7 +1844,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     return TextField(
       controller: ctrl,
       onTap: () => _selectAll(ctrl),
-      onChanged: (_) => _onManualNutrientTyped(),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       style: const TextStyle(color: AppColors.textMain, fontSize: 13),
       decoration: InputDecoration(
