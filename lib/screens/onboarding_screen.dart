@@ -232,6 +232,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _submitStep7Targets() async {
     final birthDateStr = '$_selectedYear-${_selectedMonth.toString().padLeft(2, '0')}-${_selectedDay.toString().padLeft(2, '0')}';
+    final age = _calculatedAge;
+    final height = double.tryParse(_heightController.text) ?? 175.0;
+    final weight = double.tryParse(_weightController.text) ?? 70.0;
+    final activity = double.tryParse(_activityLevel) ?? 1.2;
+
+    double bmr;
+    if (_gender == 'male') {
+      bmr = (10 * weight) + (6.25 * height) - (5 * age) + 5;
+    } else {
+      bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161;
+    }
+
+    final initialTdee = bmr * activity;
+
     final payload = UserProfile(
       id: '1',
       goalMode: _isManualOverride ? 'manual' : 'calculator',
@@ -241,11 +255,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       targetFatG: double.tryParse(_targetFatController.text) ?? 65.0,
       birthDate: birthDateStr,
       gender: _gender,
-      height: double.tryParse(_heightController.text) ?? 175.0,
-      weight: double.tryParse(_weightController.text) ?? 70.0,
+      height: height,
+      weight: weight,
       activity: _activityLevel,
       goal: _weeklyGoal,
       proteinMultiplier: _proteinMultiplier,
+      estimatedTdee: initialTdee, // Explicitly saved from Day 1
     );
 
     await _firestoreService.saveProfile(payload);

@@ -271,30 +271,14 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     return val.toStringAsFixed(1);
   }
 
-  Future<void> _copyLogToToday(DailyLog log) async {
+  void _copyLogToToday(DailyLog log) {
     final now = DateTime.now();
     final todayStr = DateFormat('yyyy-MM-dd').format(now);
-
-    DateTime parsedTime;
-    try {
-      parsedTime = DateTime.parse(log.loggedAt).toLocal();
-    } catch (_) {
-      parsedTime = now;
-    }
-
-    final updatedDt = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      parsedTime.hour,
-      parsedTime.minute,
-      parsedTime.second,
-    );
 
     final newLog = DailyLog(
       id: '',
       date: todayStr,
-      loggedAt: updatedDt.toIso8601String(),
+      loggedAt: now.toIso8601String(), // Explicitly set to current time of day
       foodId: log.foodId,
       foodName: log.foodName,
       servingName: log.servingName,
@@ -306,8 +290,8 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
       micros: log.micros,
     );
 
-    await FirestoreService().addLog(newLog);
-    if (!mounted) return;
+    // Instant optimistic write to in-memory list and non-blocking background Firestore write
+    FirestoreService().addLog(newLog);
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -675,7 +659,6 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Expand/Collapse Interactive Title
               InkWell(
                 onTap: () {
                   HapticFeedback.selectionClick();
@@ -711,8 +694,6 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                   ),
                 ),
               ),
-
-              // Phase Totals: Macros + Calories
               Row(
                 children: [
                   Text.rich(
@@ -754,7 +735,6 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
             ],
           ),
         ),
-
         if (!isCollapsed)
           ...logs.map((log) => _buildCompactLogCard(log)),
       ],

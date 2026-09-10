@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/weight_log.dart';
 import '../services/firestore_service.dart';
+import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
 
 class WeightTrackerScreen extends StatefulWidget {
@@ -26,7 +27,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   late DateTime _selectedLogDate;
   String _activePreset = 'month';
   bool _isHistoryExpanded = false;
-  bool _focusTrend = false; // By default false: Scale is solid, Trend is dashed
+  bool _focusTrend = false;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
@@ -113,7 +114,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     }
   }
 
-  Future<void> _submitWeightLog() async {
+  void _submitWeightLog() {
     final weight = double.tryParse(_weightInputController.text);
     if (weight == null || weight <= 0) {
       _showToast('Please enter a valid body weight.', isError: true);
@@ -121,8 +122,8 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     }
 
     final dateKey = DateFormat('yyyy-MM-dd').format(_selectedLogDate);
-    await _firestoreService.setWeightLog(WeightLog(date: dateKey, weightKg: weight));
 
+    _firestoreService.setWeightLog(WeightLog(date: dateKey, weightKg: weight));
     HapticFeedback.mediumImpact();
     _showToast('Weight logged for ${DateFormat('MMM d').format(_selectedLogDate)}!');
     _weightInputController.clear();
@@ -184,32 +185,37 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     return ValueListenableBuilder<List<WeightLog>>(
       valueListenable: _firestoreService.weightLogsNotifier,
       builder: (context, allLogs, _) {
-        final filteredLogs = _filterLogs(allLogs);
-        final historyDesc = List<WeightLog>.from(filteredLogs).reversed.toList();
+        return ValueListenableBuilder<Map<String, double>>(
+          valueListenable: AdaptiveCoachService().trendWeightsNotifier,
+          builder: (context, trendWeightsMap, _) {
+            final filteredLogs = _filterLogs(allLogs);
+            final historyDesc = List<WeightLog>.from(filteredLogs).reversed.toList();
 
-        return Scaffold(
-          appBar: widget.autoEditLatest
-              ? AppBar(
-                  title: const Text('Weight Tracker'),
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                )
-              : null,
-          body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-              physics: const BouncingScrollPhysics(),
-              children: [
-                _buildQuickLogCard(),
-                const SizedBox(height: 14),
-                _buildChartCard(filteredLogs),
-                const SizedBox(height: 14),
-                _buildHistorySection(historyDesc),
-              ],
-            ),
-          ),
+            return Scaffold(
+              appBar: widget.autoEditLatest
+                  ? AppBar(
+                      title: const Text('Weight Tracker'),
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    )
+                  : null,
+              body: SafeArea(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    _buildQuickLogCard(),
+                    const SizedBox(height: 14),
+                    _buildChartCard(filteredLogs, trendWeightsMap),
+                    const SizedBox(height: 14),
+                    _buildHistorySection(historyDesc, trendWeightsMap),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -288,9 +294,11 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     );
   }
 
-  Widget _buildChartCard(List<WeightLog> logs) {
-    final latestTrend = logs.isNotEmpty ? logs.last.trendWeightKg : null;
+  Widget _buildChartCard(List<WeightLog> logs, Map<String, double> trendWeightsMap) {
     final latestScale = logs.isNotEmpty ? logs.last.weightKg : null;
+    final latestTrend = logs.isNotEmpty
+        ? (trendWeightsMap[logs.last.date] ?? AdaptiveCoachService().liveObserverStateNotifier.value?.estimatedMassKg)
+        : null;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -310,7 +318,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
 
-              // Interactive Toggle Button
               InkWell(
                 onTap: () {
                   HapticFeedback.selectionClick();
@@ -392,7 +399,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ],
           const SizedBox(height: 12),
 
-          // Presets row
           SizedBox(
             height: 34,
             child: ListView(
@@ -417,7 +423,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Dynamic Legend based on active toggle
           Row(
             children: [
               Row(
@@ -465,7 +470,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                       style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                     ),
                   )
-                : _buildWeightLineChart(logs),
+                : _buildWeightLineChart(logs, trendWeightsMap),
           ),
         ],
       ),
@@ -505,7 +510,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     );
   }
 
-  Widget _buildWeightLineChart(List<WeightLog> logs) {
+  Widget _buildWeightLineChart(List<WeightLog> logs, Map<String, double> trendWeightsMap) {
     final parsedDates = logs.map((l) {
       try {
         return DateTime.parse(l.date);
@@ -524,8 +529,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     double maxWeight = logs.first.weightKg;
 
     for (int i = 0; i < logs.length; i++) {
-      final w = logs[i].weightKg;
-      final trend = logs[i].trendWeightKg ?? w;
+      final log = logs[i];
+      final w = log.weightKg;
+      final trend = trendWeightsMap[log.date] ?? log.trendWeightKg ?? w;
 
       if (w < minWeight) minWeight = w;
       if (w > maxWeight) maxWeight = w;
@@ -541,7 +547,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     final paddingY = weightDelta == 0 ? 2.0 : (weightDelta * 0.15).clamp(1.0, 5.0);
     final double dateInterval = math.max(1.0, (totalDaysSpan / 4).floorToDouble());
 
-    // Primary (solid curve) and Secondary (dashed line) based on toggle
     final primarySpots = _focusTrend ? trendSpots : scaleSpots;
     final secondarySpots = _focusTrend ? scaleSpots : trendSpots;
 
@@ -618,7 +623,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                 }
 
                 final scaleVal = matchedLog?.weightKg;
-                final trendVal = matchedLog?.trendWeightKg;
+                final trendVal = matchedLog != null ? (trendWeightsMap[matchedLog.date] ?? matchedLog.trendWeightKg) : null;
 
                 return LineTooltipItem(
                   '$dateStr\n',
@@ -649,7 +654,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ),
         ),
         lineBarsData: [
-          // 1. Primary Solid Curve (Scale by default, Trend if toggled) - NO EXPLICIT POINTS
           LineChartBarData(
             spots: primarySpots,
             isCurved: true,
@@ -670,8 +674,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               ),
             ),
           ),
-
-          // 2. Secondary Dashed Line (Trend by default, Scale if toggled) - NO EXPLICIT POINTS
           LineChartBarData(
             spots: secondarySpots,
             isCurved: true,
@@ -687,7 +689,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     );
   }
 
-  Widget _buildHistorySection(List<WeightLog> logs) {
+  Widget _buildHistorySection(List<WeightLog> logs, Map<String, double> trendWeightsMap) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -754,16 +756,17 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                 ),
               )
             else
-              ...logs.map((log) => _buildWeightHistoryTile(log)),
+              ...logs.map((log) => _buildWeightHistoryTile(log, trendWeightsMap[log.date])),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildWeightHistoryTile(WeightLog log) {
+  Widget _buildWeightHistoryTile(WeightLog log, double? computedTrend) {
     final parsedDate = DateTime.tryParse(log.date);
     final dateDisplay = parsedDate != null ? DateFormat('EEEE, MMM d, yyyy').format(parsedDate) : log.date;
+    final trendVal = computedTrend ?? log.trendWeightKg;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -785,7 +788,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     '${log.weightKg.toStringAsFixed(1)} kg',
                     style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.3),
                   ),
-                  if (log.trendWeightKg != null) ...[
+                  if (trendVal != null) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -794,7 +797,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'Trend: ${log.trendWeightKg!.toStringAsFixed(1)} kg',
+                        'Trend: ${trendVal.toStringAsFixed(1)} kg',
                         style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.primary),
                       ),
                     ),
@@ -883,13 +886,13 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () async {
+                  onPressed: () {
                     final newW = double.tryParse(editCtrl.text);
                     if (newW != null && newW > 0) {
-                      await _firestoreService.setWeightLog(WeightLog(date: log.date, weightKg: newW));
+                      Navigator.pop(ctx);
+                      _firestoreService.setWeightLog(WeightLog(date: log.date, weightKg: newW));
                       HapticFeedback.mediumImpact();
                       _showToast('Weight log updated!');
-                      if (mounted) Navigator.pop(ctx);
                     }
                   },
                   child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -902,9 +905,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     );
   }
 
-  void _confirmDeleteWeight(WeightLog log) async {
+  void _confirmDeleteWeight(WeightLog log) {
     HapticFeedback.mediumImpact();
-    final confirm = await showDialog<bool>(
+    showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -937,7 +940,12 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => Navigator.pop(ctx, true),
+                  onPressed: () {
+                    Navigator.pop(ctx, true);
+                    _firestoreService.deleteWeightLog(log.date);
+                    HapticFeedback.mediumImpact();
+                    _showToast('Weight log deleted.');
+                  },
                   child: const Text('Delete'),
                 ),
               ),
@@ -946,10 +954,5 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
         ],
       ),
     );
-
-    if (confirm == true) {
-      await _firestoreService.deleteWeightLog(log.date);
-      _showToast('Weight log deleted.');
-    }
   }
 }

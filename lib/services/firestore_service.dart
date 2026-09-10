@@ -8,7 +8,6 @@ import '../models/food_item.dart';
 import '../models/daily_log.dart';
 import '../models/weight_log.dart';
 import '../models/user_profile.dart';
-import 'adaptive_coach_service.dart';
 import 'auth_service.dart';
 
 class FirestoreService {
@@ -154,59 +153,145 @@ class FirestoreService {
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
 
+  // --- Optimistic In-Memory Mutations + Non-Blocking Firestore Background Sync ---
+
   Future<String> addLog(DailyLog log) async {
-    final ref = _db.collection('users').doc(_uid).collection('logs').doc();
-    await ref.set(log.toMap());
-    return ref.id;
+    final String id = log.id.isNotEmpty ? log.id : _db.collection('users').doc(_uid).collection('logs').doc().id;
+    final resolvedLog = DailyLog(
+      id: id,
+      date: log.date,
+      loggedAt: log.loggedAt,
+      foodId: log.foodId,
+      foodName: log.foodName,
+      servingName: log.servingName,
+      baseUnit: log.baseUnit,
+      emoji: log.emoji,
+      servings: log.servings,
+      servingSizeG: log.servingSizeG,
+      macros: log.macros,
+      micros: log.micros,
+    );
+
+    // 1. Instant optimistic local state update
+    final current = List<DailyLog>.from(logsNotifier.value)
+      ..removeWhere((l) => l.id == id)
+      ..add(resolvedLog);
+    current.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+    logsNotifier.value = current;
+
+    // 2. Background Firestore write
+    _db.collection('users').doc(_uid).collection('logs').doc(id).set(resolvedLog.toMap());
+    return id;
   }
 
   Future<void> updateLog(String id, Map<String, dynamic> changes) async {
-    await _db.collection('users').doc(_uid).collection('logs').doc(id).update(changes);
+    // 1. Instant optimistic local state update
+    final current = List<DailyLog>.from(logsNotifier.value);
+    final idx = current.indexWhere((l) => l.id == id);
+    if (idx != -1) {
+      final old = current[idx];
+      final map = old.toMap()..addAll(changes);
+      current[idx] = DailyLog.fromFirestore(id, map);
+      current.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+      logsNotifier.value = current;
+    }
+
+    // 2. Background Firestore update
+    _db.collection('users').doc(_uid).collection('logs').doc(id).update(changes);
   }
 
   Future<void> deleteLog(String id) async {
-    await _db.collection('users').doc(_uid).collection('logs').doc(id).delete();
+    // 1. Instant optimistic local state update
+    final current = List<DailyLog>.from(logsNotifier.value)..removeWhere((l) => l.id == id);
+    logsNotifier.value = current;
+
+    // 2. Background Firestore delete
+    _db.collection('users').doc(_uid).collection('logs').doc(id).delete();
   }
 
   Future<String> addFood(FoodItem food) async {
-    final ref = _db.collection('users').doc(_uid).collection('foods').doc();
-    await ref.set(food.toMap());
-    return ref.id;
+    final String id = food.id.isNotEmpty ? food.id : _db.collection('users').doc(_uid).collection('foods').doc().id;
+    final resolvedFood = FoodItem(
+      id: id,
+      name: food.name,
+      source: food.source,
+      usdaFdcId: food.usdaFdcId,
+      servingSizeG: food.servingSizeG,
+      baseUnit: food.baseUnit,
+      density: food.density,
+      servingName: food.servingName,
+      emoji: food.emoji,
+      isFavorite: food.isFavorite,
+      macros: food.macros,
+      micros: food.micros,
+      ingredients: food.ingredients,
+    );
+
+    // 1. Instant optimistic local state update
+    final current = List<FoodItem>.from(foodsNotifier.value)
+      ..removeWhere((f) => f.id == id)
+      ..add(resolvedFood);
+    foodsNotifier.value = current;
+
+    // 2. Background Firestore write
+    _db.collection('users').doc(_uid).collection('foods').doc(id).set(resolvedFood.toMap());
+    return id;
   }
 
   Future<void> updateFood(String id, Map<String, dynamic> changes) async {
-    await _db.collection('users').doc(_uid).collection('foods').doc(id).update(changes);
+    // 1. Instant optimistic local state update
+    final current = List<FoodItem>.from(foodsNotifier.value);
+    final idx = current.indexWhere((f) => f.id == id);
+    if (idx != -1) {
+      final old = current[idx];
+      final map = old.toMap()..addAll(changes);
+      current[idx] = FoodItem.fromFirestore(id, map);
+      foodsNotifier.value = current;
+    }
+
+    // 2. Background Firestore update
+    _db.collection('users').doc(_uid).collection('foods').doc(id).update(changes);
   }
 
   Future<void> deleteFood(String id) async {
-    await _db.collection('users').doc(_uid).collection('foods').doc(id).delete();
+    // 1. Instant optimistic local state update
+    final current = List<FoodItem>.from(foodsNotifier.value)..removeWhere((f) => f.id == id);
+    foodsNotifier.value = current;
+
+    // 2. Background Firestore delete
+    _db.collection('users').doc(_uid).collection('foods').doc(id).delete();
   }
 
-  /// Sets raw weight log and updates profile weight/TDEE (0 cascading writes).
   Future<void> setWeightLog(WeightLog log) async {
-    final liveState = AdaptiveCoachService().liveObserverStateNotifier.value;
-    final double? liveTdee = liveState?.tdeeKcal;
+    // 1. Instant optimistic local state update
+    final current = List<WeightLog>.from(weightLogsNotifier.value)
+      ..removeWhere((w) => w.date == log.date)
+      ..add(log);
+    current.sort((a, b) => a.date.compareTo(b.date));
+    weightLogsNotifier.value = current;
 
-    // 1. Write only date and raw weight
-    await _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(
+    // 2. Background Firestore writes
+    _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(
       log.toMap(),
       SetOptions(merge: true),
     );
 
-    // 2. Sync profile weight and TDEE
     final Map<String, dynamic> profileUpdates = {
       'weight': log.weightKg,
-      if (liveTdee != null) 'estimated_tdee': liveTdee,
     };
-
-    await _db.collection('users').doc(_uid).collection('profile').doc('1').set(
+    _db.collection('users').doc(_uid).collection('profile').doc('1').set(
       profileUpdates,
       SetOptions(merge: true),
     );
   }
 
   Future<void> deleteWeightLog(String date) async {
-    await _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
+    // 1. Instant optimistic local state update
+    final current = List<WeightLog>.from(weightLogsNotifier.value)..removeWhere((w) => w.date == date);
+    weightLogsNotifier.value = current;
+
+    // 2. Background Firestore delete
+    _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
   }
 
   Future<void> saveProfile(UserProfile profile) async {
@@ -272,7 +357,7 @@ class FirestoreService {
 
     profileNotifier.value = updatedProfile;
 
-    await _db.collection('users').doc(_uid).collection('profile').doc('1').set(
+    _db.collection('users').doc(_uid).collection('profile').doc('1').set(
       updatedProfile.toMap(),
       SetOptions(merge: true),
     );

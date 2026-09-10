@@ -49,11 +49,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   String _calcMethod = 'calculator';
   DateTime _goalPhaseStartDate = DateTime.now();
 
+  // Memory baseline to preserve adaptive corrections when toggling dropdowns
+  String _originalGoal = '0';
+  double _originalActiveCalories = 2000.0;
+
   bool _obscureUsda = true;
   bool _obscureGemini = true;
   bool _includeBranded = false;
   bool _isUploadingPhoto = false;
-  bool _showExtremeWarning = false;
 
   String? _userPhotoUrl;
 
@@ -72,6 +75,37 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       return logs.last.weightKg;
     }
     return _firestoreService.profileNotifier.value.weight;
+  }
+
+  double get _currentBmr {
+    final age = _calculatedAge;
+    final height = double.tryParse(_heightController.text) ?? 175.0;
+    final weight = _latestWeight;
+    if (_gender == 'male') {
+      return (10 * weight) + (6.25 * height) - (5 * age) + 5;
+    } else {
+      return (10 * weight) + (6.25 * height) - (5 * age) - 161;
+    }
+  }
+
+  double? get _calibratedTdee {
+    return AdaptiveCoachService().liveObserverStateNotifier.value?.tdeeKcal ??
+        _firestoreService.profileNotifier.value.estimatedTdee;
+  }
+
+  bool get _isEngineCalibrated {
+    final tdee = _calibratedTdee;
+    final hasEnoughLogs = _firestoreService.logsNotifier.value.length >= 7 ||
+        _firestoreService.weightLogsNotifier.value.length >= 4;
+    return tdee != null && tdee > 1000 && hasEnoughLogs;
+  }
+
+  double get _effectiveBaseTdee {
+    if (_isEngineCalibrated) {
+      return _calibratedTdee!;
+    }
+    final activity = double.tryParse(_activityLevel) ?? 1.2;
+    return _currentBmr * activity;
   }
 
   @override
@@ -100,7 +134,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     });
   }
 
-Future<void> _loadInitialData() async {
+  Future<void> _loadInitialData() async {
     final user = _authService.currentUser;
     if (user != null) {
       setState(() {
@@ -144,6 +178,9 @@ Future<void> _loadInitialData() async {
       _proteinMultiplier = p.proteinMultiplier;
       _goalPhaseStartDate = phaseStart;
 
+      _originalGoal = p.goal;
+      _originalActiveCalories = activeCal;
+
       _targetCalController.text = activeCal.round().toString();
       _targetProController.text = activePro.round().toString();
       _targetCarbController.text = activeCarb.round().toString();
@@ -160,34 +197,33 @@ Future<void> _loadInitialData() async {
     }
   }
 
-  void _performLiveCalculations() {
-    final age = _calculatedAge;
-    final height = double.tryParse(_heightController.text) ?? 175.0;
+  void _performLiveCalculations({bool isMacroOnlyChange = false}) {
     final weight = _latestWeight;
-    final activity = double.tryParse(_activityLevel) ?? 1.2;
-    final goalAdjustment = double.tryParse(_weeklyGoal) ?? 0.0;
     final proteinFactor = double.tryParse(_proteinMultiplier) ?? 2.0;
 
-    double bmr;
-    if (_gender == 'male') {
-      bmr = (10 * weight) + (6.25 * height) - (5 * age) + 5;
+    double targetCalsDouble;
+
+    if (isMacroOnlyChange) {
+      // Macro changes preserve the active calorie budget
+      targetCalsDouble = double.tryParse(_targetCalController.text) ?? _originalActiveCalories;
     } else {
-      bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161;
+      if (_weeklyGoal == _originalGoal) {
+        // Switching back to active goal strategy preserves the adaptive check-in target (e.g. -628 kcal)
+        targetCalsDouble = _originalActiveCalories;
+      } else {
+        // Genuine new goal strategy calculates from TDEE + Goal offset
+        final goalAdjustment = double.tryParse(_weeklyGoal) ?? 0.0;
+        targetCalsDouble = _effectiveBaseTdee + goalAdjustment;
+      }
+      _targetCalController.text = targetCalsDouble.round().toString();
     }
 
-    final tdee = bmr * activity;
-    final targetCals = (tdee + goalAdjustment).round();
-
-    final minSafe = _gender == 'female' ? 1200 : 1500;
-    final isExtreme = targetCals < minSafe;
-
+    final targetCals = targetCalsDouble.round();
     final protein = (weight * proteinFactor).round();
     final fat = ((targetCals * 0.25) / 9).round();
     final carbs = ((targetCals - (protein * 4) - (fat * 9)) / 4).round().clamp(0, 9999);
 
     setState(() {
-      _showExtremeWarning = isExtreme;
-      _targetCalController.text = targetCals.toString();
       _targetProController.text = protein.toString();
       _targetCarbController.text = carbs.toString();
       _targetFatController.text = fat.toString();
@@ -231,7 +267,7 @@ Future<void> _loadInitialData() async {
       ),
     ).then((_) {
       if (mounted) {
-        _performLiveCalculations();
+        _performLiveCalculations(isMacroOnlyChange: false);
       }
     });
   }
@@ -353,96 +389,100 @@ Future<void> _loadInitialData() async {
     _authService.updateDisplayName(trimmed);
     _showToast('Name updated to "$trimmed"');
   }
-Future<void> _saveProfileAndGoals() async {
-  final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-  final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
-  final currentProfile = _firestoreService.profileNotifier.value;
-  final updatedPhases = List<GoalPhase>.from(currentProfile.goalPhases);
 
-  final newCal = double.tryParse(_targetCalController.text) ?? 2000.0;
-  final newPro = double.tryParse(_targetProController.text) ?? 150.0;
-  final newCarb = double.tryParse(_targetCarbController.text) ?? 200.0;
-  final newFat = double.tryParse(_targetFatController.text) ?? 65.0;
+  void _saveProfileAndGoals() {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
+    final currentProfile = _firestoreService.profileNotifier.value;
+    final updatedPhases = List<GoalPhase>.from(currentProfile.goalPhases);
 
-  final manualAdjustment = TargetAdjustment(
-    id: DateTime.now().millisecondsSinceEpoch.toString(),
-    date: todayStr,
-    targetCalories: newCal,
-    targetProteinG: newPro,
-    targetCarbsG: newCarb,
-    targetFatG: newFat,
-    acceptedByUser: false,
-    isManual: true,
-    notes: 'Manual profile settings update',
-  );
+    final newCal = double.tryParse(_targetCalController.text) ?? 2000.0;
+    final newPro = double.tryParse(_targetProController.text) ?? 150.0;
+    final newCarb = double.tryParse(_targetCarbController.text) ?? 200.0;
+    final newFat = double.tryParse(_targetFatController.text) ?? 65.0;
 
-  if (updatedPhases.isNotEmpty) {
-    final lastPhase = updatedPhases.removeLast();
-    final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
-      ..removeWhere((a) => a.date == todayStr)
-      ..add(manualAdjustment);
-
-    updatedPhases.add(GoalPhase(
-      id: lastPhase.id,
-      startDate: lastPhase.startDate,
-      endDate: lastPhase.endDate,
-      goal: _weeklyGoal,
-      goalType: lastPhase.goalType,
-      initialCalories: lastPhase.initialCalories,
-      initialProteinG: lastPhase.initialProteinG,
-      initialCarbsG: lastPhase.initialCarbsG,
-      initialFatG: lastPhase.initialFatG,
-      adjustments: adjList,
-    ));
-  } else {
-    updatedPhases.add(GoalPhase(
+    final manualAdjustment = TargetAdjustment(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      startDate: todayStr,
+      date: todayStr,
+      targetCalories: newCal,
+      targetProteinG: newPro,
+      targetCarbsG: newCarb,
+      targetFatG: newFat,
+      estimatedExpenditure: _effectiveBaseTdee,
+      acceptedByUser: false,
+      isManual: true,
+      notes: 'Manual profile settings update',
+    );
+
+    if (updatedPhases.isNotEmpty) {
+      final lastPhase = updatedPhases.removeLast();
+      final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
+        ..removeWhere((a) => a.date == todayStr)
+        ..add(manualAdjustment);
+
+      updatedPhases.add(GoalPhase(
+        id: lastPhase.id,
+        startDate: lastPhase.startDate,
+        endDate: lastPhase.endDate,
+        goal: _weeklyGoal,
+        goalType: lastPhase.goalType,
+        initialCalories: lastPhase.initialCalories,
+        initialProteinG: lastPhase.initialProteinG,
+        initialCarbsG: lastPhase.initialCarbsG,
+        initialFatG: lastPhase.initialFatG,
+        adjustments: adjList,
+      ));
+    } else {
+      updatedPhases.add(GoalPhase(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        startDate: todayStr,
+        goal: _weeklyGoal,
+        goalType: GoalType.maintain,
+        initialCalories: newCal,
+        initialProteinG: newPro,
+        initialCarbsG: newCarb,
+        initialFatG: newFat,
+        adjustments: [manualAdjustment],
+      ));
+    }
+
+    final payload = UserProfile(
+      id: '1',
+      goalMode: _calcMethod,
+      targetCalories: newCal,
+      targetProteinG: newPro,
+      targetCarbsG: newCarb,
+      targetFatG: newFat,
+      birthDate: birthDateStr,
+      gender: _gender,
+      height: double.tryParse(_heightController.text) ?? 175.0,
+      weight: _latestWeight,
+      activity: _activityLevel,
       goal: _weeklyGoal,
-      goalType: GoalType.maintain,
-      initialCalories: newCal,
-      initialProteinG: newPro,
-      initialCarbsG: newCarb,
-      initialFatG: newFat,
-      adjustments: [manualAdjustment],
-    ));
+      proteinMultiplier: _proteinMultiplier,
+      estimatedTdee: _effectiveBaseTdee, // Never null
+      goalPhases: updatedPhases,
+    );
+
+    // 0ms instant UI reaction
+    HapticFeedback.mediumImpact();
+    _showToast('Target goals saved successfully!');
+    _firestoreService.saveProfile(payload);
   }
 
-  final payload = UserProfile(
-    id: '1',
-    goalMode: _calcMethod,
-    targetCalories: newCal,
-    targetProteinG: newPro,
-    targetCarbsG: newCarb,
-    targetFatG: newFat,
-    birthDate: birthDateStr,
-    gender: _gender,
-    height: double.tryParse(_heightController.text) ?? 175.0,
-    weight: _latestWeight,
-    activity: _activityLevel,
-    goal: _weeklyGoal,
-    proteinMultiplier: _proteinMultiplier,
-    estimatedTdee: currentProfile.estimatedTdee,
-    goalPhases: updatedPhases,
-  );
-
-  await _firestoreService.saveProfile(payload);
-
-  HapticFeedback.mediumImpact();
-  _showToast('Target goals saved successfully!');
-}
-   Future<void> _saveApiSettings() async {
+  void _saveApiSettings() {
     final usdaKey = _usdaKeyController.text.trim();
     final geminiKey = _geminiKeyController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
 
     if (user != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('usda_api_key_${user.uid}', usdaKey);
-      await prefs.setString('gemini_api_key_${user.uid}', geminiKey);
-      await prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setString('usda_api_key_${user.uid}', usdaKey);
+        prefs.setString('gemini_api_key_${user.uid}', geminiKey);
+        prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
+      });
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
+      FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
         'usda_api_key': usdaKey,
         'gemini_api_key': geminiKey,
         'usda_include_branded': _includeBranded,
@@ -630,7 +670,7 @@ Future<void> _saveProfileAndGoals() async {
                           Text(entry.key, style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14)),
                         ],
                       ),
-                      if (isSelected) Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20),
+                      if (isSelected)  Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20),
                     ],
                   ),
                 ),
@@ -663,7 +703,7 @@ Future<void> _saveProfileAndGoals() async {
                 child: _userPhotoUrl == null || _userPhotoUrl!.isEmpty
                     ? Text(
                         name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primary),
+                        style:  TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primary),
                       )
                     : null,
               ),
@@ -736,7 +776,7 @@ Future<void> _saveProfileAndGoals() async {
                     color: AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
+                  child:  Text(
                     'Cloud Sync Active',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
                   ),
@@ -754,6 +794,8 @@ Future<void> _saveProfileAndGoals() async {
       valueListenable: _firestoreService.weightLogsNotifier,
       builder: (context, _, __) {
         final currentWeight = _latestWeight;
+        final baseTdeeVal = _effectiveBaseTdee;
+        final isCalibrated = _isEngineCalibrated;
 
         return Container(
           padding: const EdgeInsets.all(18),
@@ -775,6 +817,54 @@ Future<void> _saveProfileAndGoals() async {
                 style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 16),
+
+              // Live TDEE Expenditure Card
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'CALCULATED EXPENDITURE (TDEE)',
+                          style: TextStyle(fontSize: 9.5, color: AppColors.textMuted, fontWeight: FontWeight.w800, letterSpacing: 0.4),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${baseTdeeVal.round()} kcal / day',
+                          style:  TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isCalibrated ? AppColors.primary.withValues(alpha: 0.15) : AppColors.surfaceHover,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isCalibrated ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border,
+                        ),
+                      ),
+                      child: Text(
+                        isCalibrated ? 'CALIBRATED' : 'FORMULA BASELINE',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: isCalibrated ? AppColors.primary : AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
 
               // Active Goal Phase Info Pill
               Container(
@@ -803,7 +893,7 @@ Future<void> _saveProfileAndGoals() async {
                       ),
                       child: Text(
                         _weeklyGoal == '0' ? 'MAINTAIN' : (double.tryParse(_weeklyGoal)! > 0 ? 'BULK' : 'CUT'),
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
+                        style:  TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.primary),
                       ),
                     ),
                   ],
@@ -811,7 +901,6 @@ Future<void> _saveProfileAndGoals() async {
               ),
               const SizedBox(height: 10),
 
-              // On-Demand Review Card if an adjustment is pending or dismissed
               ValueListenableBuilder<WeeklyCheckInProposal?>(
                 valueListenable: AdaptiveCoachService().dismissedProposalNotifier,
                 builder: (context, proposal, _) {
@@ -834,11 +923,11 @@ Future<void> _saveProfileAndGoals() async {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
+                           Row(
                             children: [
                               Icon(Icons.auto_awesome_rounded, size: 16, color: AppColors.primary),
-                              const SizedBox(width: 8),
-                              const Text(
+                              SizedBox(width: 8),
+                              Text(
                                 'Review Adaptive Adjustment',
                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
                               ),
@@ -848,10 +937,10 @@ Future<void> _saveProfileAndGoals() async {
                             children: [
                               Text(
                                 '${proposal.proposedCalories} kcal',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+                                style:  TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
                               ),
                               const SizedBox(width: 4),
-                              Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.primary),
+                               Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.primary),
                             ],
                           ),
                         ],
@@ -889,6 +978,7 @@ Future<void> _saveProfileAndGoals() async {
                 ],
               ),
               const SizedBox(height: 12),
+
               _buildSelectorTile(
                 label: 'Activity Level',
                 value: _activityLevel,
@@ -902,11 +992,12 @@ Future<void> _saveProfileAndGoals() async {
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _activityLevel = val);
-                    _performLiveCalculations();
+                    _performLiveCalculations(isMacroOnlyChange: false);
                   }
                 },
               ),
               const SizedBox(height: 10),
+
               _buildSelectorTile(
                 label: 'Goal Strategy Preset',
                 value: _weeklyGoal,
@@ -920,11 +1011,12 @@ Future<void> _saveProfileAndGoals() async {
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _weeklyGoal = val);
-                    _performLiveCalculations();
+                    _performLiveCalculations(isMacroOnlyChange: false);
                   }
                 },
               ),
               const SizedBox(height: 10),
+
               _buildSelectorTile(
                 label: 'Protein Target Preference',
                 value: _proteinMultiplier,
@@ -944,7 +1036,8 @@ Future<void> _saveProfileAndGoals() async {
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _proteinMultiplier = val);
-                    _performLiveCalculations();
+                    // Protein modification locks the active calorie budget
+                    _performLiveCalculations(isMacroOnlyChange: true);
                   }
                 },
               ),
@@ -961,10 +1054,10 @@ Future<void> _saveProfileAndGoals() async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'DAILY TARGETS',
                           style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
                         ),
@@ -999,7 +1092,7 @@ Future<void> _saveProfileAndGoals() async {
                                   onChanged: _onManualCalorieChanged,
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.right,
-                                  style: TextStyle(
+                                  style:  TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.w900,
                                     color: AppColors.primary,
@@ -1031,29 +1124,6 @@ Future<void> _saveProfileAndGoals() async {
                         _buildTargetMacroCapsule('Fat', _targetFatController, AppColors.fat),
                       ],
                     ),
-                    if (_showExtremeWarning) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.warning),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Warning: Target is below recommended minimum energy safety guidelines.',
-                                style: TextStyle(color: AppColors.warning, fontSize: 11, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -1083,7 +1153,7 @@ Future<void> _saveProfileAndGoals() async {
           setState(() {
             _birthDate = picked;
           });
-          _performLiveCalculations();
+          _performLiveCalculations(isMacroOnlyChange: false);
         }
       },
       borderRadius: BorderRadius.circular(14),
@@ -1119,7 +1189,7 @@ Future<void> _saveProfileAndGoals() async {
               ),
               child: Text(
                 '$_calculatedAge yrs',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+                style:  TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
               ),
             ),
           ],
@@ -1145,10 +1215,10 @@ Future<void> _saveProfileAndGoals() async {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
+             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Weight (Latest)', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                Text('Weight (Latest)', style: TextStyle(fontSize: 10.5, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                 Icon(Icons.open_in_new_rounded, size: 13, color: AppColors.primary),
               ],
             ),
@@ -1178,7 +1248,7 @@ Future<void> _saveProfileAndGoals() async {
       onTap: () {
         HapticFeedback.selectionClick();
         setState(() => _gender = value);
-        _performLiveCalculations();
+        _performLiveCalculations(isMacroOnlyChange: false);
       },
       borderRadius: BorderRadius.circular(14),
       child: AnimatedContainer(
@@ -1230,7 +1300,7 @@ Future<void> _saveProfileAndGoals() async {
                 child: TextField(
                   controller: controller,
                   onTap: () => _selectAll(controller),
-                  onChanged: (_) => _performLiveCalculations(),
+                  onChanged: (_) => _performLiveCalculations(isMacroOnlyChange: false),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.textMain),
                   decoration: const InputDecoration(
@@ -1379,10 +1449,10 @@ Future<void> _saveProfileAndGoals() async {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                   ),
-                  child: Row(
+                  child:  Row(
                     children: [
                       Icon(Icons.help_outline_rounded, size: 14, color: AppColors.primary),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Text(
                         'Setup Guide',
                         style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary),
@@ -1406,7 +1476,7 @@ Future<void> _saveProfileAndGoals() async {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.help_outline_rounded, color: AppColors.textMuted, size: 18),
+                    icon:  Icon(Icons.help_outline_rounded, color: AppColors.textMuted, size: 18),
                     onPressed: () => ApiKeyGuideSheet.show(context, initialService: ApiKeyType.usda),
                     tooltip: 'How to get USDA key?',
                   ),
@@ -1481,7 +1551,7 @@ Future<void> _saveProfileAndGoals() async {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
         title: const Text('Sign Out', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
         content: const Text('Are you sure you want to sign out of your account?', style: TextStyle(color: AppColors.textMuted)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1491,7 +1561,7 @@ Future<void> _saveProfileAndGoals() async {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.border),
+                    side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

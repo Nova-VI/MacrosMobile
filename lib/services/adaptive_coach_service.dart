@@ -50,11 +50,14 @@ class AdaptiveCoachService {
   final ValueNotifier<WeeklyCheckInProposal?> dismissedProposalNotifier = ValueNotifier(null);
   final ValueNotifier<AdaptiveCoachState?> liveObserverStateNotifier = ValueNotifier(null);
 
-  /// Clears in-memory singletons on sign out so no data leaks between accounts.
+  /// Holds the dynamically computed trend weights (Date -> kg) derived in memory
+  final ValueNotifier<Map<String, double>> trendWeightsNotifier = ValueNotifier({});
+
   void resetState() {
     checkInProposalNotifier.value = null;
     dismissedProposalNotifier.value = null;
     liveObserverStateNotifier.value = null;
+    trendWeightsNotifier.value = {};
   }
 
   Future<void> recomputeAndEvaluate() async {
@@ -62,7 +65,6 @@ class AdaptiveCoachService {
     final allLogs = _firestoreService.logsNotifier.value;
     final allWeights = _firestoreService.weightLogsNotifier.value;
 
-    // Strict guard: Never run on uninitialized default profiles or empty histories
     if (profile.goalPhases.isEmpty || (allWeights.isEmpty && allLogs.isEmpty)) {
       return;
     }
@@ -112,6 +114,7 @@ class AdaptiveCoachService {
 
     int studyDay = 0;
     final List<double> recent14dCalories = [];
+    final Map<String, double> computedTrendWeights = {};
 
     while (!cursor.isAfter(today)) {
       final dateKey = DateFormat('yyyy-MM-dd').format(cursor);
@@ -145,11 +148,15 @@ class AdaptiveCoachService {
         activityMultiplier: activityMultiplier,
       );
 
+      // Record in-memory trend weight for every recorded day
+      computedTrendWeights[dateKey] = currentState.estimatedMassKg;
+
       studyDay++;
       cursor = cursor.add(const Duration(days: 1));
     }
 
     liveObserverStateNotifier.value = currentState;
+    trendWeightsNotifier.value = computedTrendWeights;
 
     await _evaluateWeeklyCheckInEligibility(
       profile: profile,

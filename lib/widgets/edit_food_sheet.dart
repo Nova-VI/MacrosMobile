@@ -120,9 +120,9 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     );
   }
 
-  Future<void> _confirmDeleteFood() async {
+  void _confirmDeleteFood() {
     HapticFeedback.mediumImpact();
-    final confirm = await showDialog<bool>(
+    showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -155,7 +155,12 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => Navigator.pop(ctx, true),
+                  onPressed: () {
+                    Navigator.pop(ctx, true); // Close confirmation dialog
+                    Navigator.pop(context); // Close bottom sheet immediately
+                    FirestoreService().deleteFood(widget.food.id);
+                    HapticFeedback.mediumImpact();
+                  },
                   child: const Text('Delete'),
                 ),
               ),
@@ -164,15 +169,9 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
         ],
       ),
     );
-
-    if (confirm == true && mounted) {
-      await FirestoreService().deleteFood(widget.food.id);
-      HapticFeedback.mediumImpact();
-      if (mounted) Navigator.pop(context);
-    }
   }
 
-  Future<void> _saveChanges() async {
+  void _saveChanges() {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
@@ -209,9 +208,10 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       ingredients: widget.food.ingredients,
     );
 
-    await FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
+    // 0ms instant dismiss
+    Navigator.pop(context);
     HapticFeedback.mediumImpact();
-    if (mounted) Navigator.pop(context);
+    FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
   }
 
   @override
@@ -225,7 +225,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       ),
       child: Column(
         children: [
-          // Drag Handle
           Center(
             child: Container(
               width: 40,
@@ -237,8 +236,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
             ),
           ),
           const SizedBox(height: 14),
-
-          // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -266,13 +263,10 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
             ],
           ),
           const SizedBox(height: 10),
-
-          // Form Body
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),
               children: [
-                // Identity: Emoji & Name
                 Row(
                   children: [
                     InkWell(
@@ -301,8 +295,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                // Base Serving & Unit
                 Row(
                   children: [
                     Expanded(
@@ -347,7 +339,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   ],
                 ),
                 const SizedBox(height: 10),
-
                 TextField(
                   controller: _servingUnitController,
                   onTap: () => _selectAll(_servingUnitController),
@@ -358,8 +349,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Macronutrients Row
                 const Text(
                   'MACRONUTRIENTS (PER BASE SERVING)',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
@@ -381,7 +370,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   ],
                 ),
                 const SizedBox(height: 10),
-
                 TextField(
                   controller: _caloriesController,
                   onTap: () => _selectAll(_caloriesController),
@@ -390,8 +378,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   decoration: const InputDecoration(labelText: 'Calories (kcal)'),
                 ),
                 const SizedBox(height: 14),
-
-                // Micronutrients Expander
                 InkWell(
                   onTap: () => setState(() => _isMicrosExpanded = !_isMicrosExpanded),
                   borderRadius: BorderRadius.circular(10),
@@ -413,7 +399,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                     ),
                   ),
                 ),
-
                 if (_isMicrosExpanded) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -477,8 +462,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   ),
                 ],
                 const SizedBox(height: 20),
-
-                // Actions: Delete & Save
                 Row(
                   children: [
                     Expanded(

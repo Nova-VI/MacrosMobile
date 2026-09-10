@@ -480,7 +480,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  Future<void> _saveOnlyToLibrary() async {
+  void _saveOnlyToLibrary() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       _showToast('Food name is required to save to library.', isError: true);
@@ -512,14 +512,17 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: _getParsedMicros().scale(mult > 0 ? 1.0 / mult : 1.0),
     );
 
-    final id = await _firestoreService.addFood(item);
-    if (_selectedEmoji == '🍽️') {
-      _handleBackgroundAiEmoji(id, null, name);
-    }
-
+    // 0ms instant feedback
     HapticFeedback.mediumImpact();
     _showToast('"$name" saved to library!');
     _resetToNewQuickLog();
+
+    // Background persistence
+    _firestoreService.addFood(item).then((id) {
+      if (_selectedEmoji == '🍽️') {
+        _handleBackgroundAiEmoji(id, null, name);
+      }
+    });
   }
 
   MicroNutrients _getParsedMicros() {
@@ -538,7 +541,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  Future<void> _submitLog() async {
+  void _submitLog() {
     final name = _nameController.text.trim();
     if (name.isEmpty && _saveToLibrary) {
       _showToast('Food name is required to save to library.', isError: true);
@@ -557,8 +560,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     final micros = _getParsedMicros();
 
     String? foodId = _currentBaseFood?.id;
-    String finalEmoji = _selectedEmoji;
-    bool triggerAiEmoji = (finalEmoji == '🍽️' && name.isNotEmpty);
+    final String finalEmoji = _selectedEmoji;
+    final bool triggerAiEmoji = (finalEmoji == '🍽️' && name.isNotEmpty);
 
     if (_saveToLibrary && _editingLogId == null && !_isLibraryBound) {
       final libraryItem = FoodItem(
@@ -579,7 +582,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         micros: micros.scale(mult > 0 ? 1.0 / mult : 1.0),
       );
 
-      foodId = await _firestoreService.addFood(libraryItem);
+      _firestoreService.addFood(libraryItem).then((id) => foodId = id);
     }
 
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -606,27 +609,28 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: micros,
     );
 
+    // 0ms instant UI reaction
+    HapticFeedback.mediumImpact();
     if (_editingLogId != null) {
       _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
-      HapticFeedback.mediumImpact();
       _showToast('Daily log updated!');
       widget.onLogCompleted();
     } else {
-      final newLogId = await _firestoreService.addLog(logPayload);
-      if (triggerAiEmoji) {
-        _handleBackgroundAiEmoji(foodId, newLogId, displayName);
-      }
-      HapticFeedback.mediumImpact();
       _showToast('"$displayName" logged successfully!');
       _resetToNewQuickLog();
+      _firestoreService.addLog(logPayload).then((newLogId) {
+        if (triggerAiEmoji) {
+          _handleBackgroundAiEmoji(foodId, newLogId, displayName);
+        }
+      });
     }
   }
 
-  Future<void> _confirmAndDeleteCurrentLog() async {
+  void _confirmAndDeleteCurrentLog() {
     if (_editingLogId == null) return;
     HapticFeedback.mediumImpact();
 
-    final confirm = await showDialog<bool>(
+    showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
@@ -668,7 +672,14 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () => Navigator.pop(ctx, true),
+                  onPressed: () {
+                    Navigator.pop(ctx, true);
+                    // 0ms instant UI dismiss
+                    _firestoreService.deleteLog(_editingLogId!);
+                    HapticFeedback.mediumImpact();
+                    _showToast('Daily log entry deleted.');
+                    widget.onLogCompleted();
+                  },
                   child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ),
@@ -677,13 +688,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         ],
       ),
     );
-
-    if (confirm == true && mounted) {
-      await _firestoreService.deleteLog(_editingLogId!);
-      HapticFeedback.mediumImpact();
-      _showToast('Daily log entry deleted.');
-      widget.onLogCompleted();
-    }
   }
 
   void _handleBackgroundAiEmoji(String? foodId, String? logId, String name) async {
@@ -742,24 +746,16 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   const SizedBox(height: 14),
                 ],
 
-                // Island 1: Food & Identity Card
                 _buildFoodIdentityCard(),
                 const SizedBox(height: 14),
-
-                // Island 2: Portion & Scaling Island
                 _buildPortionCard(),
                 const SizedBox(height: 14),
-
-                // Island 3: Macronutrients Card
                 _buildNutritionCard(),
                 const SizedBox(height: 14),
-
-                // Island 4: Actions & Options Card
                 _buildActionsCard(),
               ],
             ),
 
-            // Floating Quick Log Bubble
             if (_showFloatingLogButton)
               Positioned(
                 bottom: 24,
@@ -1015,7 +1011,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 1: Food & Identity Card
   Widget _buildFoodIdentityCard() {
     final isEditMode = _editingLogId != null;
 
@@ -1147,7 +1142,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 2: Portion & Scaling Card
   Widget _buildPortionCard() {
     final isEditMode = _editingLogId != null;
 
