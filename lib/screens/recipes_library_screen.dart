@@ -24,11 +24,11 @@ class RecipesLibraryScreen extends StatefulWidget {
 }
 
 class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
-  late int _selectedSegment; // 0 = Food Library, 1 = Recipe Composer
+  late int _selectedSegment;
 
   // Library State
   final _librarySearchController = TextEditingController();
-  String _selectedFilterTag = 'all'; // 'all', 'favorites', 'custom', 'usda', 'composite'
+  String _selectedFilterTag = 'all';
 
   // Recipe Composer State
   final _recipeNameController = TextEditingController();
@@ -73,7 +73,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     });
   }
 
-  // --- Recipe Math Rollup ---
+  String _formatAmount(double val) {
+    if (val % 1 == 0) return val.toInt().toString();
+    return val.toStringAsFixed(1);
+  }
+
   double get _totalRecipeGrams => _recipeIngredients.fold(0.0, (acc, i) => acc + i.quantityG);
 
   MacroNutrients get _aggregatedRecipeMacros {
@@ -120,7 +124,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     );
   }
 
-  // --- Ingredient Search for Recipe Composer ---
   void _onIngredientSearchChanged(String q) {
     _debounceTimer?.cancel();
     final query = q.trim().toLowerCase();
@@ -165,8 +168,8 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: BorderSide(color: AppColors.border)),
-        title: Text('Amount of ${food.name}', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: AppColors.border)),
+        title: Text('Amount of ${food.name}', style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +181,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               onTap: () => _selectAll(_ingredientWeightController),
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
+              style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
               decoration: const InputDecoration(labelText: 'Weight (g)'),
             ),
           ],
@@ -190,7 +193,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.border),
+                    side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -282,8 +285,74 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       _recipeUnitController.clear();
       _recipeEmoji = '🍽️';
       _recipeIngredients.clear();
-      _selectedSegment = 0; // Switch to Library to see the saved recipe
+      _selectedSegment = 0;
     });
+  }
+
+  Future<void> _confirmDeleteCurrentRecipe() async {
+    if (_editingRecipeId == null) return;
+    HapticFeedback.mediumImpact();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
+        title: const Text('Delete Recipe', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
+        content: Text(
+          'Remove "${_recipeNameController.text.isNotEmpty ? _recipeNameController.text : 'this recipe'}" from your library? Past daily logs will remain intact.',
+          style: const TextStyle(color: AppColors.textMuted),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: AppColors.textMain,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Delete'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final recipeName = _recipeNameController.text;
+      await _firestoreService.deleteFood(_editingRecipeId!);
+      HapticFeedback.mediumImpact();
+      _showToast('"$recipeName" deleted from library.');
+      setState(() {
+        _editingRecipeId = null;
+        _recipeNameController.clear();
+        _recipeUnitController.clear();
+        _recipeEmoji = '🍽️';
+        _recipeIngredients.clear();
+        _selectedSegment = 0;
+      });
+    }
   }
 
   void _handleRecipeAiEmoji(String foodId, String name) async {
@@ -301,7 +370,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       _recipeEmoji = recipe.emoji.isNotEmpty ? recipe.emoji : '🍽️';
       _recipeIngredients.clear();
       _recipeIngredients.addAll(recipe.ingredients);
-      _selectedSegment = 1; // Switch to Recipe Composer
+      _selectedSegment = 1;
     });
   }
 
@@ -309,7 +378,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -327,13 +396,10 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Segmented Switcher Header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
               child: _buildSegmentedHeader(),
             ),
-
-            // Tab Content
             Expanded(
               child: _selectedSegment == 0 ? _buildLibraryTab() : _buildRecipeComposerTab(),
             ),
@@ -419,7 +485,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
           physics: const BouncingScrollPhysics(),
           children: [
-            // Search Input
             Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -429,13 +494,13 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               child: TextField(
                 controller: _librarySearchController,
                 onChanged: (_) => setState(() {}),
-                style: TextStyle(color: AppColors.textMain),
+                style: const TextStyle(color: AppColors.textMain),
                 decoration: InputDecoration(
                   hintText: 'Search saved library foods...',
-                  prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
+                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
                   suffixIcon: _librarySearchController.text.isNotEmpty
                       ? IconButton(
-                          icon: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                          icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
                           onPressed: () {
                             _librarySearchController.clear();
                             setState(() {});
@@ -449,8 +514,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               ),
             ),
             const SizedBox(height: 10),
-
-            // Filter Chips Row
             SizedBox(
               height: 36,
               child: ListView(
@@ -470,8 +533,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               ),
             ),
             const SizedBox(height: 14),
-
-            // Food List Items
             if (filtered.isEmpty)
               _buildEmptyLibraryState()
             else
@@ -513,73 +574,143 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
 
   Widget _buildLibraryItemCard(FoodItem food) {
     final isComposite = food.source == 'composite';
-    final badgeLabel = isComposite ? 'Recipe' : food.source.toUpperCase();
+    final badgeLabel = isComposite ? 'RECIPE' : food.source.toUpperCase();
     final badgeColor = isComposite ? const Color(0xFF9333EA) : (food.source == 'usda' ? AppColors.secondary : AppColors.primary);
 
+    final int cVal = food.macros.calories.round();
+    final String pVal = _formatAmount(food.macros.proteinG);
+    final String cCarbVal = _formatAmount(food.macros.carbsG);
+    final String fVal = _formatAmount(food.macros.fatG);
+    final String basePortion = '${food.servingSizeG.round()}${food.baseUnit}${food.servingName.isNotEmpty ? ' (${food.servingName})' : ''}';
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.border, width: 1),
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Header Row: Favorite Star, Emoji, Title, Badge & Edit/Delete Actions
+            // Standalone large emoji
+            Padding(
+              padding: const EdgeInsets.only(right: 12, left: 2),
+              child: Text(
+                food.emoji.isNotEmpty ? food.emoji : '🍽️',
+                style: const TextStyle(fontSize: 28),
+              ),
+            ),
+
+            // Title & Inline Macros
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          food.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textMain,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: badgeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          badgeLabel,
+                          style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w800, color: badgeColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '$cVal',
+                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                        ),
+                        TextSpan(
+                          text: 'cal  ',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary.withValues(alpha: 0.95)),
+                        ),
+                        TextSpan(
+                          text: '$pVal',
+                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                        ),
+                        TextSpan(
+                          text: 'p  ',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95)),
+                        ),
+                        TextSpan(
+                          text: '$cCarbVal',
+                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                        ),
+                        TextSpan(
+                          text: 'c  ',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95)),
+                        ),
+                        TextSpan(
+                          text: '$fVal',
+                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                        ),
+                        TextSpan(
+                          text: 'f',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95)),
+                        ),
+                        TextSpan(
+                          text: ' • $basePortion',
+                          style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+
+            // Actions: Favorite and Edit button only (Trash removed from card)
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
                   icon: Icon(
                     food.isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
                     color: food.isFavorite ? const Color(0xFFFBBF24) : AppColors.textMuted,
-                    size: 22,
+                    size: 20,
                   ),
                   splashRadius: 18,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                   onPressed: () {
                     HapticFeedback.selectionClick();
                     _firestoreService.updateFood(food.id, {'is_favorite': !food.isFavorite});
                   },
-                  tooltip: 'Toggle Favorite',
+                  tooltip: 'Favorite',
                 ),
-                const SizedBox(width: 4),
-                Text(food.emoji.isNotEmpty ? food.emoji : '🍽️', style: TextStyle(fontSize: 18)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        food.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain, letterSpacing: -0.3),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Base: ${food.servingSizeG.round()}${food.baseUnit} ${food.servingName.isNotEmpty ? '(${food.servingName})' : ''}',
-                        style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    badgeLabel,
-                    style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: badgeColor),
-                  ),
-                ),
-                const SizedBox(width: 4),
                 IconButton(
-                  icon: Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
+                  icon: const Icon(Icons.edit_note_rounded, size: 21, color: AppColors.textMuted),
                   splashRadius: 18,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   onPressed: () {
                     if (isComposite) {
                       _editCompositeRecipe(food);
@@ -592,57 +723,9 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                       );
                     }
                   },
-                  tooltip: 'Edit Item',
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
-                  splashRadius: 18,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                  onPressed: () => _confirmDeleteFood(food),
-                  tooltip: 'Delete Food',
+                  tooltip: 'Edit / Delete Item',
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-
-            // 4 Compact Metric Capsules
-            Row(
-              children: [
-                _buildCompactCapsule('Calories', '${food.macros.calories.round()}', color: AppColors.primary),
-                const SizedBox(width: 6),
-                _buildCompactCapsule('Protein', '${food.macros.proteinG.toStringAsFixed(1)}g', color: AppColors.protein),
-                const SizedBox(width: 6),
-                _buildCompactCapsule('Carbs', '${food.macros.carbsG.toStringAsFixed(1)}g', color: AppColors.carbs),
-                const SizedBox(width: 6),
-                _buildCompactCapsule('Fat', '${food.macros.fatG.toStringAsFixed(1)}g', color: AppColors.fat),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactCapsule(String label, String value, {required Color color}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4.5),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: AppColors.textMuted, letterSpacing: 0.3),
-            ),
-            const SizedBox(height: 1),
-            Text(
-              value,
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: color),
             ),
           ],
         ),
@@ -658,66 +741,16 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
-      child: Column(
+      child: const Column(
         children: [
           Icon(Icons.menu_book_rounded, size: 36, color: AppColors.textMuted),
-          const SizedBox(height: 12),
-          const Text('No Foods Found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain)),
-          const SizedBox(height: 4),
-          const Text('Save custom items while logging or build composite meals with the Recipe Composer.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4)),
+          SizedBox(height: 12),
+          Text('No Foods Found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+          SizedBox(height: 4),
+          Text('Save custom items while logging or build composite meals with the Recipe Composer.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4)),
         ],
       ),
     );
-  }
-
-  void _confirmDeleteFood(FoodItem food) async {
-    HapticFeedback.mediumImpact();
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: AppColors.border)),
-        title: const Text('Delete Food', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: Text('Remove "${food.name}" from your library? Past daily logs will remain intact.', style: TextStyle(color: AppColors.textMuted)),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.border),
-                    foregroundColor: AppColors.textMain,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.danger,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Delete'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _firestoreService.deleteFood(food.id);
-      _showToast('"${food.name}" removed from library.');
-    }
   }
 
   // ==================== TAB 2: RECIPE COMPOSER ====================
@@ -728,27 +761,48 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
       physics: const BouncingScrollPhysics(),
       children: [
-        // Island 1: Recipe Identity Card
         _buildRecipeIdentityCard(),
         const SizedBox(height: 14),
-
-        // Island 2: Ingredient Search & Autocomplete
         _buildIngredientSearchCard(),
         const SizedBox(height: 14),
-
-        // Island 3: Ingredients List
         _buildIngredientsListCard(),
         const SizedBox(height: 14),
-
-        // Island 4: Aggregated Total Nutrition Card
         _buildRecipeTotalsCard(totalMacros),
         const SizedBox(height: 14),
 
-        // Save Recipe Button
-        ElevatedButton(
-          onPressed: _saveRecipe,
-          child: Text(_editingRecipeId != null ? 'Update Recipe in Library' : 'Save Recipe to Library'),
-        ),
+        // Actions: Delete button appears when editing
+        if (_editingRecipeId != null) ...[
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.danger),
+                    foregroundColor: AppColors.danger,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onPressed: _confirmDeleteCurrentRecipe,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('Delete Recipe', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: _saveRecipe,
+                  child: const Text('Update Recipe'),
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          ElevatedButton(
+            onPressed: _saveRecipe,
+            child: const Text('Save Recipe to Library'),
+          ),
+        ],
       ],
     );
   }
@@ -769,7 +823,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
             children: [
               Text(
                 _editingRecipeId != null ? 'Edit Composite Recipe' : 'New Recipe',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
               if (_editingRecipeId != null)
                 InkWell(
@@ -782,7 +836,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                       _recipeIngredients.clear();
                     });
                   },
-                  child: const Text('Cancel Edit', style: TextStyle(color: AppColors.danger, fontSize: 12, fontWeight: FontWeight.w700)),
+                  child: const Text('Cancel Edit', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
             ],
           ),
@@ -810,14 +864,14 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                     border: Border.all(color: AppColors.border),
                   ),
                   alignment: Alignment.center,
-                  child: Text(_recipeEmoji, style: TextStyle(fontSize: 26)),
+                  child: Text(_recipeEmoji, style: const TextStyle(fontSize: 28)),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
                   controller: _recipeNameController,
-                  style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                  style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
                   decoration: const InputDecoration(labelText: 'Recipe Name', hintText: 'e.g. Protein Pancakes'),
                 ),
               ),
@@ -827,7 +881,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           TextField(
             controller: _recipeUnitController,
             onTap: () => _selectAll(_recipeUnitController),
-            style: TextStyle(color: AppColors.textMain),
+            style: const TextStyle(color: AppColors.textMain),
             decoration: const InputDecoration(
               labelText: 'Portion Unit Name (optional)',
               hintText: 'e.g. portion, bowl, slice',
@@ -857,10 +911,10 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           TextField(
             controller: _ingredientSearchController,
             onChanged: _onIngredientSearchChanged,
-            style: TextStyle(color: AppColors.textMain),
+            style: const TextStyle(color: AppColors.textMain),
             decoration: InputDecoration(
               hintText: 'Search ingredient from library or USDA...',
-              prefixIcon: Icon(Icons.search_rounded, color: AppColors.textMuted),
+              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
               suffixIcon: _isSearchingIngredients
                   ?  Padding(
                       padding: EdgeInsets.all(12),
@@ -886,16 +940,16 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   children: [
                     ..._ingredientLocalResults.map((food) => ListTile(
                           dense: true,
-                          leading: Text(food.emoji, style: TextStyle(fontSize: 18)),
-                          title: Text(food.name, style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
+                          leading: Text(food.emoji, style: const TextStyle(fontSize: 20)),
+                          title: Text(food.name, style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
                           trailing:  Text('LIBRARY', style: TextStyle(color: AppColors.primary, fontSize: 9.5, fontWeight: FontWeight.w800)),
                           onTap: () => _openIngredientWeightModal(food),
                         )),
                     ..._ingredientUsdaResults.map((usda) => ListTile(
                           dense: true,
-                          leading: const Text('🍽️', style: TextStyle(fontSize: 18)),
-                          title: Text(usda['description'], style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
-                          trailing:  Text('USDA', style: TextStyle(color: AppColors.secondary, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                          leading: const Text('🍽️', style: TextStyle(fontSize: 20)),
+                          title: Text(usda['description'], style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
+                          trailing: const Text('USDA', style: TextStyle(color: AppColors.secondary, fontSize: 9.5, fontWeight: FontWeight.w800)),
                           onTap: () async {
                             final details = await _usdaService.getFoodDetails(usda['fdcId']);
                             if (details != null) _openIngredientWeightModal(details);
@@ -925,8 +979,8 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-               Text('INGREDIENTS LIST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
-              Text('${_recipeIngredients.length} added', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+              const Text('INGREDIENTS LIST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
+              Text('${_recipeIngredients.length} added', style:  TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ],
           ),
           const SizedBox(height: 10),
@@ -943,47 +997,59 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
               final idx = entry.key;
               final ing = entry.value;
 
+              final int cVal = ing.macros.calories.round();
+              final String pVal = _formatAmount(ing.macros.proteinG);
+              final String cCarbVal = _formatAmount(ing.macros.carbsG);
+              final String fVal = _formatAmount(ing.macros.fatG);
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.background,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
                 ),
-                child: Column(
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Text(ing.emoji, style: TextStyle(fontSize: 16)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
+                    Text(ing.emoji, style: const TextStyle(fontSize: 22)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
                             '${ing.name} (${ing.quantityG.round()}g)',
-                            style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13.5),
+                            style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 13.5),
                           ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.close_rounded, size: 18, color: AppColors.danger),
-                          splashRadius: 18,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                          onPressed: () {
-                            HapticFeedback.selectionClick();
-                            setState(() => _recipeIngredients.removeAt(idx));
-                          },
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(text: '$cVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: 'cal  ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary.withValues(alpha: 0.95))),
+                                TextSpan(text: '$pVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: 'p  ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95))),
+                                TextSpan(text: '$cCarbVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: 'c  ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95))),
+                                TextSpan(text: '$fVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: 'f', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95))),
+                              ],
+                            ),
+                            style: const TextStyle(fontSize: 11.5),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Text('${ing.macros.calories.round()} kcal', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                        Text('P: ${ing.macros.proteinG.toStringAsFixed(1)}g', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
-                        Text('C: ${ing.macros.carbsG.toStringAsFixed(1)}g', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
-                        Text('F: ${ing.macros.fatG.toStringAsFixed(1)}g', style: TextStyle(fontSize: 11.5, color: AppColors.textMuted)),
-                      ],
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.danger),
+                      splashRadius: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        setState(() => _recipeIngredients.removeAt(idx));
+                      },
                     ),
                   ],
                 ),
@@ -995,6 +1061,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
   }
 
   Widget _buildRecipeTotalsCard(MacroNutrients macros) {
+    final int cVal = macros.calories.round();
+    final String pVal = _formatAmount(macros.proteinG);
+    final String cCarbVal = _formatAmount(macros.carbsG);
+    final String fVal = _formatAmount(macros.fatG);
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1012,7 +1083,8 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('RECIPE TOTAL NUTRITION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
-                  Text('Total Batch Weight: ${_totalRecipeGrams.round()}g', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMain)),
+                  const SizedBox(height: 2),
+                  Text('Total Batch Yield: ${_totalRecipeGrams.round()}g', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textMain)),
                 ],
               ),
               TextButton(
@@ -1036,16 +1108,38 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildCompactCapsule('Calories', '${macros.calories.round()}', color: AppColors.primary),
-              const SizedBox(width: 6),
-              _buildCompactCapsule('Protein', '${macros.proteinG.toStringAsFixed(1)}g', color: AppColors.protein),
-              const SizedBox(width: 6),
-              _buildCompactCapsule('Carbs', '${macros.carbsG.toStringAsFixed(1)}g', color: AppColors.carbs),
-              const SizedBox(width: 6),
-              _buildCompactCapsule('Fat', '${macros.fatG.toStringAsFixed(1)}g', color: AppColors.fat),
-            ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border.withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$cVal', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.textMain)),
+                      TextSpan(text: 'cal  ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.primary.withValues(alpha: 0.95))),
+                    ],
+                  ),
+                ),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$pVal', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                      TextSpan(text: 'p  ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95))),
+                      TextSpan(text: '$cCarbVal', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                      TextSpan(text: 'c  ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95))),
+                      TextSpan(text: '$fVal', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                      TextSpan(text: 'f', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95))),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

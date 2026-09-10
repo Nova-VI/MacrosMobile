@@ -120,6 +120,58 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     );
   }
 
+  Future<void> _confirmDeleteFood() async {
+    HapticFeedback.mediumImpact();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
+        title: const Text('Delete Food', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
+        content: Text('Remove "${widget.food.name}" from your library? Past daily logs will remain intact.', style: const TextStyle(color: AppColors.textMuted)),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: AppColors.textMain,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Delete'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await FirestoreService().deleteFood(widget.food.id);
+      HapticFeedback.mediumImpact();
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
   Future<void> _saveChanges() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
@@ -169,7 +221,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
@@ -190,12 +242,25 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Edit Food Definition',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain),
+              Row(
+                children: [
+                  const Text(
+                    'Edit Food Definition',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.danger),
+                    splashRadius: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: _confirmDeleteFood,
+                    tooltip: 'Delete Food',
+                  ),
+                ],
               ),
               IconButton(
-                icon: Icon(Icons.close_rounded, color: AppColors.textMuted),
+                icon: const Icon(Icons.close_rounded, color: AppColors.textMuted),
                 onPressed: () => Navigator.pop(context),
               ),
             ],
@@ -222,14 +287,14 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                           border: Border.all(color: AppColors.border),
                         ),
                         alignment: Alignment.center,
-                        child: Text(_selectedEmoji, style: TextStyle(fontSize: 26)),
+                        child: Text(_selectedEmoji, style: const TextStyle(fontSize: 28)),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: _nameController,
-                        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
+                        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 16),
                         decoration: const InputDecoration(labelText: 'Food Name'),
                       ),
                     ),
@@ -246,7 +311,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                         controller: _servingGController,
                         onTap: () => _selectAll(_servingGController),
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
+                        style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600),
                         decoration: const InputDecoration(labelText: 'Base Serving Size'),
                       ),
                     ),
@@ -266,8 +331,8 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                           child: DropdownButton<String>(
                             value: _selectedBaseUnit,
                             dropdownColor: AppColors.surface,
-                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
-                            style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted),
+                            style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w700, fontSize: 14),
                             onChanged: (val) {
                               if (val != null) setState(() => _selectedBaseUnit = val);
                             },
@@ -286,7 +351,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                 TextField(
                   controller: _servingUnitController,
                   onTap: () => _selectAll(_servingUnitController),
-                  style: TextStyle(color: AppColors.textMain),
+                  style: const TextStyle(color: AppColors.textMain),
                   decoration: const InputDecoration(
                     labelText: 'Serving Unit Name (optional)',
                     hintText: 'e.g. slice, cup, portion',
@@ -321,7 +386,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   controller: _caloriesController,
                   onTap: () => _selectAll(_caloriesController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+                  style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
                   decoration: const InputDecoration(labelText: 'Calories (kcal)'),
                 ),
                 const SizedBox(height: 14),
@@ -340,8 +405,8 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                           size: 20,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          _isMicrosExpanded ? 'Hide Micronutrients' : 'Show Advanced Micronutrients',
+                         Text(
+                          'Advanced Micronutrients',
                           style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                         ),
                       ],
@@ -413,10 +478,31 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                 ],
                 const SizedBox(height: 20),
 
-                // Save Button
-                ElevatedButton(
-                  onPressed: _saveChanges,
-                  child: const Text('Save Changes to Library'),
+                // Actions: Delete & Save
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.danger),
+                          foregroundColor: AppColors.danger,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: _confirmDeleteFood,
+                        icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                        label: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: _saveChanges,
+                        child: const Text('Save Changes'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -431,7 +517,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       controller: controller,
       onTap: () => _selectAll(controller),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
+      style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: color.withValues(alpha: 0.9), fontWeight: FontWeight.w600, fontSize: 12),
@@ -445,7 +531,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       controller: ctrl,
       onTap: () => _selectAll(ctrl),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      style: TextStyle(color: AppColors.textMain, fontSize: 13),
+      style: const TextStyle(color: AppColors.textMain, fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),

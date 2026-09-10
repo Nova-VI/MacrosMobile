@@ -115,7 +115,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     final currentScroll = _scrollController.position.pixels;
     final isNearBottom = (maxScroll - currentScroll) < 100;
 
-    // Quick log should NOT have the bubble. Only saved library foods or edit mode show the bubble.
     final isSavedOrEdit = _isLibraryBound || _editingLogId != null;
     final shouldShow = isSavedOrEdit && !isNearBottom;
 
@@ -623,6 +622,70 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     }
   }
 
+  Future<void> _confirmAndDeleteCurrentLog() async {
+    if (_editingLogId == null) return;
+    HapticFeedback.mediumImpact();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text(
+          'Delete Entry',
+          style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'Remove "${_nameController.text.isNotEmpty ? _nameController.text : 'this food'}" from this day\'s log?',
+          style: const TextStyle(color: AppColors.textMuted),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: AppColors.textMain,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await _firestoreService.deleteLog(_editingLogId!);
+      HapticFeedback.mediumImpact();
+      _showToast('Daily log entry deleted.');
+      widget.onLogCompleted();
+    }
+  }
+
   void _handleBackgroundAiEmoji(String? foodId, String? logId, String name) async {
     final aiEmoji = await GeminiService.fetchFoodEmoji(name);
     if (aiEmoji.isNotEmpty && aiEmoji != '🍽️') {
@@ -679,7 +742,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   const SizedBox(height: 14),
                 ],
 
-                // Island 1: Food & Identity Card (Clean label in edit mode)
+                // Island 1: Food & Identity Card
                 _buildFoodIdentityCard(),
                 const SizedBox(height: 14),
 
@@ -696,7 +759,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               ],
             ),
 
-            // Floating Quick Log Bubble (Only for saved/search foods and edit mode)
+            // Floating Quick Log Bubble
             if (_showFloatingLogButton)
               Positioned(
                 bottom: 24,
@@ -952,7 +1015,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 1: Food & Identity Card (Simple clean label when editing)
+  // Island 1: Food & Identity Card
   Widget _buildFoodIdentityCard() {
     final isEditMode = _editingLogId != null;
 
@@ -969,13 +1032,28 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                isEditMode ? 'Edit Entry' : (_isLibraryBound ? 'Saved Food' : 'Quick Log'),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textMain,
-                ),
+              Row(
+                children: [
+                  Text(
+                    isEditMode ? 'Edit Entry' : (_isLibraryBound ? 'Saved Food' : 'Quick Log'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textMain,
+                    ),
+                  ),
+                  if (isEditMode) ...[
+                    const SizedBox(width: 6),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.danger),
+                      splashRadius: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                      onPressed: _confirmAndDeleteCurrentLog,
+                      tooltip: 'Delete Entry',
+                    ),
+                  ],
+                ],
               ),
               Row(
                 children: [
@@ -988,7 +1066,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           ),
           const SizedBox(height: 16),
 
-          // In edit mode: show a simple, sleek text label without disabled text boxes
           if (isEditMode) ...[
             Row(
               children: [
@@ -1070,7 +1147,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  // Island 2: Portion & Scaling Card (Clean and simple)
+  // Island 2: Portion & Scaling Card
   Widget _buildPortionCard() {
     final isEditMode = _editingLogId != null;
 
@@ -1090,7 +1167,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           ),
           const SizedBox(height: 12),
 
-          // For custom quick log, allow defining base serving. For saved food or edit mode, only show the multiplier & total.
           if (!isEditMode && !_isLibraryBound) ...[
             Row(
               children: [
@@ -1153,7 +1229,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
             const SizedBox(height: 12),
           ],
 
-          // Multiplier & Total Amount Row
           Row(
             children: [
               Expanded(
@@ -1298,32 +1373,60 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
             ),
             const SizedBox(height: 10),
           ],
-          Row(
-            children: [
-              if (_editingLogId == null && !_isLibraryBound) ...[
+          if (_editingLogId != null) ...[
+            Row(
+              children: [
                 Expanded(
-                  child: OutlinedButton(
+                  child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border),
-                      foregroundColor: AppColors.textMain,
+                      side: const BorderSide(color: AppColors.danger),
+                      foregroundColor: AppColors.danger,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    onPressed: _saveOnlyToLibrary,
-                    child: const Text('Save Only', style: TextStyle(fontWeight: FontWeight.w700)),
+                    onPressed: _confirmAndDeleteCurrentLog,
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
                 ),
                 const SizedBox(width: 10),
-              ],
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: _submitLog,
-                  child: Text(_editingLogId != null ? 'Update Log Entry' : 'Log Food'),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: _submitLog,
+                    child: const Text('Update Log Entry'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ] else ...[
+            Row(
+              children: [
+                if (!_isLibraryBound) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.border),
+                        foregroundColor: AppColors.textMain,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: _saveOnlyToLibrary,
+                      child: const Text('Save Only', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: _submitLog,
+                    child: const Text('Log Food'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

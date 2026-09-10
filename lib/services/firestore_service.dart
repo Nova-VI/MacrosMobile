@@ -144,7 +144,7 @@ class FirestoreService {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final migrationKey = 'migrated_to_goal_phases_v2_$uid';
-    if (prefs.getBool(migrationKey) == true) return;
+    //if (prefs.getBool(migrationKey) == true) return;
 
     if (profile.goalPhases.isEmpty && (logs.isNotEmpty || weights.isNotEmpty)) {
       final allDates = [

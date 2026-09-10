@@ -47,12 +47,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _selectedDateNotifier = ValueNotifier(_today);
     _pageController = PageController(initialPage: _initialPage);
 
-    // Run adaptive coach evaluation cleanly on post-frame initialization
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AdaptiveCoachService().recomputeAndEvaluate();
     });
 
-    // Listen to log and weight updates outside of build
     FirestoreService().logsNotifier.addListener(_onDataChanged);
     FirestoreService().weightLogsNotifier.addListener(_onDataChanged);
   }
@@ -140,10 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (context, profile, _) {
             return Column(
               children: [
-                // 1. Weekly Check-In Interactive Banner (Only appears when check-in is due)
                 const WeeklyCheckInBanner(),
-
-                // 2. Date Navigation Bar
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: ValueListenableBuilder<DateTime>(
@@ -160,7 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             IconButton(
-                              icon: Icon(Icons.chevron_left_rounded, color: AppColors.textMain, size: 26),
+                              icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textMain, size: 26),
                               onPressed: () => _goToPageOffset(-1),
                               tooltip: 'Previous Day',
                             ),
@@ -171,11 +166,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
+                                     Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
                                     const SizedBox(width: 8),
                                     Text(
                                       _getDateHeaderTitle(currentDate),
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
                                         color: AppColors.textMain,
@@ -187,7 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ),
                             IconButton(
-                              icon: Icon(Icons.chevron_right_rounded, color: AppColors.textMain, size: 26),
+                              icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textMain, size: 26),
                               onPressed: () => _goToPageOffset(1),
                               tooltip: 'Next Day',
                             ),
@@ -251,6 +246,7 @@ class _DashboardDayView extends StatefulWidget {
 
 class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeepAliveClientMixin {
   final Set<String> _expandedLogIds = {};
+  final Set<DayPhase> _collapsedPhases = {};
 
   @override
   bool get wantKeepAlive => true;
@@ -266,6 +262,69 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     } catch (_) {
       return DayPhase.afternoon;
     }
+  }
+
+  String _formatAmount(double val) {
+    if (val % 1 == 0) {
+      return val.toInt().toString();
+    }
+    return val.toStringAsFixed(1);
+  }
+
+  Future<void> _copyLogToToday(DailyLog log) async {
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+
+    DateTime parsedTime;
+    try {
+      parsedTime = DateTime.parse(log.loggedAt).toLocal();
+    } catch (_) {
+      parsedTime = now;
+    }
+
+    final updatedDt = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      parsedTime.hour,
+      parsedTime.minute,
+      parsedTime.second,
+    );
+
+    final newLog = DailyLog(
+      id: '',
+      date: todayStr,
+      loggedAt: updatedDt.toIso8601String(),
+      foodId: log.foodId,
+      foodName: log.foodName,
+      servingName: log.servingName,
+      baseUnit: log.baseUnit,
+      emoji: log.emoji,
+      servings: log.servings,
+      servingSizeG: log.servingSizeG,
+      macros: log.macros,
+      micros: log.micros,
+    );
+
+    await FirestoreService().addLog(newLog);
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Copied "${log.foodName}" to Today!',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
+        backgroundColor: AppColors.surface,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side:  BorderSide(color: AppColors.primary),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -322,24 +381,23 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     );
   }
 
-Widget _buildOverviewCard({
-  required double totalCals,
-  required double totalPro,
-  required double totalCarbs,
-  required double totalFat,
-}) {
-  // Pulls the historical target active on this page's specific date
-  final dateKey = DateFormat('yyyy-MM-dd').format(widget.pageDate);
-  final dayTarget = widget.profile.getTargetForDate(dateKey);
+  Widget _buildOverviewCard({
+    required double totalCals,
+    required double totalPro,
+    required double totalCarbs,
+    required double totalFat,
+  }) {
+    final dateKey = DateFormat('yyyy-MM-dd').format(widget.pageDate);
+    final dayTarget = widget.profile.getTargetForDate(dateKey);
 
-  final targetCals = dayTarget.targetCalories > 0 ? dayTarget.targetCalories : 2000.0;
-  final targetPro = dayTarget.targetProteinG > 0 ? dayTarget.targetProteinG : 150.0;
-  final targetCarbs = dayTarget.targetCarbsG > 0 ? dayTarget.targetCarbsG : 200.0;
-  final targetFat = dayTarget.targetFatG > 0 ? dayTarget.targetFatG : 65.0;
+    final targetCals = dayTarget.targetCalories > 0 ? dayTarget.targetCalories : 2000.0;
+    final targetPro = dayTarget.targetProteinG > 0 ? dayTarget.targetProteinG : 150.0;
+    final targetCarbs = dayTarget.targetCarbsG > 0 ? dayTarget.targetCarbsG : 200.0;
+    final targetFat = dayTarget.targetFatG > 0 ? dayTarget.targetFatG : 65.0;
 
-  final calProgress = (totalCals / targetCals).clamp(0.0, 1.0);
-  final isCalOver = totalCals > targetCals;
-  final calDiff = (targetCals - totalCals).round();
+    final calProgress = (totalCals / targetCals).clamp(0.0, 1.0);
+    final isCalOver = totalCals > targetCals;
+    final calDiff = (targetCals - totalCals).round();
 
     return ValueListenableBuilder<bool>(
       valueListenable: widget.showRemainingNotifier,
@@ -505,7 +563,7 @@ Widget _buildOverviewCard({
                   const SizedBox(width: 5),
                   Text(
                     label,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
                   ),
                 ],
               ),
@@ -571,7 +629,7 @@ Widget _buildOverviewCard({
                 ),
                 child: Text(
                   '$count',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textMuted,
@@ -587,7 +645,7 @@ Widget _buildOverviewCard({
             visualDensity: VisualDensity.compact,
             padding: const EdgeInsets.symmetric(horizontal: 8),
           ),
-          icon: Icon(Icons.add_rounded, size: 18),
+          icon: const Icon(Icons.add_rounded, size: 18),
           label: const Text('Add Food', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
         ),
       ],
@@ -596,9 +654,18 @@ Widget _buildOverviewCard({
 
   Widget _buildPhaseSection(DayPhase phase, List<DailyLog> logs) {
     double phaseCals = 0;
+    double phasePro = 0;
+    double phaseCarbs = 0;
+    double phaseFat = 0;
+
     for (final l in logs) {
       phaseCals += l.macros.calories;
+      phasePro += l.macros.proteinG;
+      phaseCarbs += l.macros.carbsG;
+      phaseFat += l.macros.fatG;
     }
+
+    final isCollapsed = _collapsedPhases.contains(phase);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,48 +675,112 @@ Widget _buildOverviewCard({
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                phase.title,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textMain,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${phaseCals.round()} kcal',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
+              // Expand/Collapse Interactive Title
+              InkWell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    if (isCollapsed) {
+                      _collapsedPhases.remove(phase);
+                    } else {
+                      _collapsedPhases.add(phase);
+                    }
+                  });
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    children: [
+                      Text(
+                        phase.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textMain,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        isCollapsed ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
+                        size: 22,
+                        color: AppColors.textMuted,
+                      ),
+                    ],
                   ),
                 ),
+              ),
+
+              // Phase Totals: Macros + Calories
+              Row(
+                children: [
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${_formatAmount(phasePro)}p ',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95)),
+                        ),
+                        TextSpan(
+                          text: '${_formatAmount(phaseCarbs)}c ',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95)),
+                        ),
+                        TextSpan(
+                          text: '${_formatAmount(phaseFat)}f',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${phaseCals.round()} kcal',
+                      style:  TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-        ...logs.map((log) => _buildCompactLogCard(log)),
+
+        if (!isCollapsed)
+          ...logs.map((log) => _buildCompactLogCard(log)),
       ],
     );
   }
 
   Widget _buildCompactLogCard(DailyLog log) {
     final isExpanded = _expandedLogIds.contains(log.id);
-    String servingLabel = log.servingName.isNotEmpty
+    final String servingLabel = log.servingName.isNotEmpty
         ? (log.servings == 1 ? log.servingName : '${log.servingName}s')
         : (log.servings == 1 ? 'serving' : 'servings');
+
+    final servingsStr = log.servings % 1 == 0
+        ? log.servings.toInt().toString()
+        : log.servings.toStringAsFixed(1);
+    final portionStr = '$servingsStr $servingLabel';
+
+    final int cVal = log.macros.calories.round();
+    final String pVal = _formatAmount(log.macros.proteinG);
+    final String cCarbVal = _formatAmount(log.macros.carbsG);
+    final String fVal = _formatAmount(log.macros.fatG);
 
     String timeStr = '';
     if (log.loggedAt.isNotEmpty) {
       try {
-        timeStr = DateFormat('hh:mm a').format(DateTime.parse(log.loggedAt));
+        timeStr = DateFormat('h:mm a').format(DateTime.parse(log.loggedAt).toLocal());
       } catch (_) {}
     }
 
@@ -678,7 +809,7 @@ Widget _buildOverviewCard({
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerLeft,
-        child: Icon(Icons.edit_rounded, color: Colors.white, size: 22),
+        child: const Icon(Icons.edit_rounded, color: Colors.white, size: 22),
       ),
       secondaryBackground: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -688,7 +819,7 @@ Widget _buildOverviewCard({
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerRight,
-        child: Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 22),
+        child: const Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 22),
       ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
@@ -710,92 +841,147 @@ Widget _buildOverviewCard({
               }
             });
           },
+          onLongPress: () {
+            HapticFeedback.heavyImpact();
+            _copyLogToToday(log);
+          },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12, left: 2),
+                      child: Text(
+                        log.emoji.isNotEmpty ? log.emoji : '🍽️',
+                        style: const TextStyle(fontSize: 28),
+                      ),
+                    ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                log.emoji.isNotEmpty ? log.emoji : '🍽️',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  log.foodName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700,
+                          Text(
+                            log.foodName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textMain,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '$cVal',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
                                     color: AppColors.textMain,
-                                    letterSpacing: -0.2,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${timeStr.isNotEmpty ? '$timeStr • ' : ''}${log.servings % 1 == 0 ? log.servings.toInt() : log.servings.toStringAsFixed(1)} $servingLabel (${log.servingSizeG.round()}${log.baseUnit})',
-                            style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
+                                TextSpan(
+                                  text: 'cal  ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.primary.withValues(alpha: 0.95),
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: '$pVal',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textMain,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'p  ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.protein.withValues(alpha: 0.95),
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: '$cCarbVal',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textMain,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'c  ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.carbs.withValues(alpha: 0.95),
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: '$fVal',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textMain,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'f',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.fat.withValues(alpha: 0.95),
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: ' • $portionStr',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
                           ),
                         ],
                       ),
                     ),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (timeStr.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: Text(
+                              timeStr,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 2),
                         IconButton(
-                          icon: Icon(Icons.edit_outlined, size: 17, color: AppColors.textMuted),
+                          icon: const Icon(Icons.edit_note_rounded, size: 22, color: AppColors.textMuted),
                           splashRadius: 18,
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                           onPressed: () => widget.onNavigateToLogWithDate(widget.pageDate, editLog: log),
-                          tooltip: 'Edit Log',
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline_rounded, size: 18, color: AppColors.textMuted),
-                          splashRadius: 18,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                          onPressed: () async {
-                            final confirm = await _showDeleteConfirmation(log);
-                            if (confirm == true) {
-                              await FirestoreService().deleteLog(log.id);
-                            }
-                          },
-                          tooltip: 'Delete Log',
+                          tooltip: 'Edit / Delete Log',
                         ),
                       ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-
-                Row(
-                  children: [
-                    _buildCompactCapsule('Calories', '${log.macros.calories.round()}', color: AppColors.primary),
-                    const SizedBox(width: 6),
-                    _buildCompactCapsule('Protein', '${log.macros.proteinG.toStringAsFixed(1)}g', color: AppColors.protein),
-                    const SizedBox(width: 6),
-                    _buildCompactCapsule('Carbs', '${log.macros.carbsG.toStringAsFixed(1)}g', color: AppColors.carbs),
-                    const SizedBox(width: 6),
-                    _buildCompactCapsule('Fat', '${log.macros.fatG.toStringAsFixed(1)}g', color: AppColors.fat),
-                  ],
-                ),
-
                 if (isExpanded) ...[
                   const SizedBox(height: 10),
                   Container(
@@ -827,47 +1013,12 @@ Widget _buildOverviewCard({
     );
   }
 
-  Widget _buildCompactCapsule(String label, String value, {required Color color}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4.5),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                fontSize: 8.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textMuted,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(height: 1),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMicroItem(String label, String val) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('$label: ', style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
-        Text(val, style: TextStyle(fontSize: 11, color: AppColors.textMain, fontWeight: FontWeight.w700)),
+        Text('$label: ', style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
+        Text(val, style: const TextStyle(fontSize: 11, color: AppColors.textMain, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -889,7 +1040,7 @@ Widget _buildOverviewCard({
               color: AppColors.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
+            child:  Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
           ),
           const SizedBox(height: 10),
           const Text(
@@ -905,7 +1056,7 @@ Widget _buildOverviewCard({
           const SizedBox(height: 14),
           ElevatedButton.icon(
             onPressed: () => widget.onNavigateToLogWithDate(widget.pageDate),
-            icon: Icon(Icons.add_rounded, size: 18),
+            icon: const Icon(Icons.add_rounded, size: 18),
             label: const Text('Log Food Now'),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(150, 38),
@@ -925,10 +1076,10 @@ Widget _buildOverviewCard({
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: AppColors.border),
+          side: const BorderSide(color: AppColors.border),
         ),
         title: const Text('Delete Entry', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: Text('Remove "${log.foodName}" from this day\'s log?', style: TextStyle(color: AppColors.textMuted)),
+        content: Text('Remove "${log.foodName}" from this day\'s log?', style: const TextStyle(color: AppColors.textMuted)),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
@@ -936,7 +1087,7 @@ Widget _buildOverviewCard({
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppColors.border),
+                    side: const BorderSide(color: AppColors.border),
                     foregroundColor: AppColors.textMain,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

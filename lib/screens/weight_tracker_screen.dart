@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -23,8 +24,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
   late DateTime _selectedLogDate;
-  String _activePreset = 'month'; // Defaults to 30 days
-  bool _isHistoryExpanded = false; // Collapsed by default
+  String _activePreset = 'month';
+  bool _isHistoryExpanded = false;
+  bool _focusTrend = false; // By default false: Scale is solid, Trend is dashed
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
@@ -243,7 +245,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.primary),
+                       Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.primary),
                       const SizedBox(width: 6),
                       Text(
                         DateFormat('MMM d').format(_selectedLogDate),
@@ -287,6 +289,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   }
 
   Widget _buildChartCard(List<WeightLog> logs) {
+    final latestTrend = logs.isNotEmpty ? logs.last.trendWeightKg : null;
+    final latestScale = logs.isNotEmpty ? logs.last.weightKg : null;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -304,15 +309,90 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                 'Weight Trend',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
-              if (logs.isNotEmpty)
-                Text(
-                  '${logs.last.weightKg.toStringAsFixed(1)} kg',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.primary),
+
+              // Interactive Toggle Button
+              InkWell(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _focusTrend = !_focusTrend);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                  decoration: BoxDecoration(
+                    color: _focusTrend ? AppColors.primary.withValues(alpha: 0.15) : AppColors.surfaceHover,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _focusTrend ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _focusTrend ? Icons.insights_rounded : Icons.show_chart_rounded,
+                        size: 14,
+                        color: _focusTrend ? AppColors.primary : AppColors.textMuted,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _focusTrend ? 'Trend Focus' : 'Scale Focus',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: _focusTrend ? AppColors.primary : AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ),
             ],
           ),
+
+          if (logs.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  _focusTrend
+                      ? (latestTrend != null ? '${latestTrend.toStringAsFixed(1)} kg' : '${latestScale!.toStringAsFixed(1)} kg')
+                      : '${latestScale!.toStringAsFixed(1)} kg',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _focusTrend ? 'Trend Weight' : 'Scale Weight',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                if (_focusTrend && latestScale != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '(Scale: ${latestScale.toStringAsFixed(1)} kg)',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                  ),
+                ] else if (!_focusTrend && latestTrend != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '(Trend: ${latestTrend.toStringAsFixed(1)} kg)',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                  ),
+                ],
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
 
+          // Presets row
           SizedBox(
             height: 34,
             child: ListView(
@@ -335,14 +415,53 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
+
+          // Dynamic Legend based on active toggle
+          Row(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 14,
+                    height: 3.5,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _focusTrend ? 'Trend (Solid)' : 'Scale (Solid)',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Row(
+                children: [
+                  Container(
+                    width: 14,
+                    height: 2,
+                    color: AppColors.textMuted.withValues(alpha: 0.6),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _focusTrend ? 'Scale (Dashed)' : 'Trend (Dashed)',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
           SizedBox(
             height: 200,
             child: logs.length < 2
                 ? Center(
                     child: Text(
-                      logs.isEmpty ? 'No weight logs in this period.' : 'Log at least 2 days to render trend line.',
+                      logs.isEmpty ? 'No weight logs in this period.' : 'Log at least 2 days to render curve.',
                       style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                     ),
                   )
@@ -387,21 +506,49 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   }
 
   Widget _buildWeightLineChart(List<WeightLog> logs) {
-    final spots = <FlSpot>[];
+    final parsedDates = logs.map((l) {
+      try {
+        return DateTime.parse(l.date);
+      } catch (_) {
+        return DateTime.now();
+      }
+    }).toList();
+
+    final minDate = parsedDates.reduce((a, b) => a.isBefore(b) ? a : b);
+    final maxDate = parsedDates.reduce((a, b) => a.isAfter(b) ? a : b);
+    final totalDaysSpan = math.max(1, maxDate.difference(minDate).inDays).toDouble();
+
+    final scaleSpots = <FlSpot>[];
+    final trendSpots = <FlSpot>[];
     double minWeight = logs.first.weightKg;
     double maxWeight = logs.first.weightKg;
 
     for (int i = 0; i < logs.length; i++) {
       final w = logs[i].weightKg;
+      final trend = logs[i].trendWeightKg ?? w;
+
       if (w < minWeight) minWeight = w;
       if (w > maxWeight) maxWeight = w;
-      spots.add(FlSpot(i.toDouble(), w));
+      if (trend < minWeight) minWeight = trend;
+      if (trend > maxWeight) maxWeight = trend;
+
+      final dayOffset = parsedDates[i].difference(minDate).inDays.toDouble();
+      scaleSpots.add(FlSpot(dayOffset, w));
+      trendSpots.add(FlSpot(dayOffset, trend));
     }
 
-    final paddingY = ((maxWeight - minWeight) * 0.15).clamp(1.0, 5.0);
+    final weightDelta = maxWeight - minWeight;
+    final paddingY = weightDelta == 0 ? 2.0 : (weightDelta * 0.15).clamp(1.0, 5.0);
+    final double dateInterval = math.max(1.0, (totalDaysSpan / 4).floorToDouble());
+
+    // Primary (solid curve) and Secondary (dashed line) based on toggle
+    final primarySpots = _focusTrend ? trendSpots : scaleSpots;
+    final secondarySpots = _focusTrend ? scaleSpots : trendSpots;
 
     return LineChart(
       LineChartData(
+        minX: 0,
+        maxX: totalDaysSpan,
         minY: (minWeight - paddingY).floorToDouble(),
         maxY: (maxWeight + paddingY).ceilToDouble(),
         gridData: FlGridData(
@@ -433,15 +580,14 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 22,
-              interval: (logs.length / 4).clamp(1.0, 10.0),
+              interval: dateInterval,
               getTitlesWidget: (val, meta) {
-                final idx = val.toInt();
-                if (idx < 0 || idx >= logs.length) return const SizedBox.shrink();
-                final d = logs[idx].date.split('-');
+                if (val < 0 || val > totalDaysSpan) return const SizedBox.shrink();
+                final targetDate = minDate.add(Duration(days: val.round()));
                 return Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    '${d[1]}/${d[2]}',
+                    DateFormat('M/d').format(targetDate),
                     style: const TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 );
@@ -455,17 +601,47 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
             getTooltipColor: (_) => AppColors.surface,
             tooltipBorder: const BorderSide(color: AppColors.border),
             getTooltipItems: (touchedSpots) {
-              return touchedSpots.map((spot) {
-                final idx = spot.x.toInt();
-                final dateStr = logs[idx].date;
+              if (touchedSpots.isEmpty) return [];
+
+              return touchedSpots.asMap().entries.map((entry) {
+                if (entry.key > 0) return null;
+                final spot = entry.value;
+                final targetDate = minDate.add(Duration(days: spot.x.round()));
+                final dateStr = DateFormat('EEE, MMM d').format(targetDate);
+
+                WeightLog? matchedLog;
+                for (int j = 0; j < logs.length; j++) {
+                  if (parsedDates[j].difference(minDate).inDays == spot.x.round()) {
+                    matchedLog = logs[j];
+                    break;
+                  }
+                }
+
+                final scaleVal = matchedLog?.weightKg;
+                final trendVal = matchedLog?.trendWeightKg;
+
                 return LineTooltipItem(
                   '$dateStr\n',
-                  const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                  const TextStyle(color: AppColors.textMuted, fontSize: 10.5, fontWeight: FontWeight.w500),
                   children: [
-                    TextSpan(
-                      text: '${spot.y.toStringAsFixed(1)} kg',
-                      style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w800),
-                    ),
+                    if (scaleVal != null)
+                      TextSpan(
+                        text: 'Scale: ${scaleVal.toStringAsFixed(1)} kg\n',
+                        style: TextStyle(
+                          color: !_focusTrend ? AppColors.primary : Colors.white,
+                          fontSize: 12.5,
+                          fontWeight: !_focusTrend ? FontWeight.w900 : FontWeight.w700,
+                        ),
+                      ),
+                    if (trendVal != null)
+                      TextSpan(
+                        text: 'Trend: ${trendVal.toStringAsFixed(1)} kg',
+                        style: TextStyle(
+                          color: _focusTrend ? AppColors.primary : AppColors.textMuted,
+                          fontSize: 12.5,
+                          fontWeight: _focusTrend ? FontWeight.w900 : FontWeight.w700,
+                        ),
+                      ),
                   ],
                 );
               }).toList();
@@ -473,33 +649,38 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ),
         ),
         lineBarsData: [
+          // 1. Primary Solid Curve (Scale by default, Trend if toggled) - NO EXPLICIT POINTS
           LineChartBarData(
-            spots: spots,
+            spots: primarySpots,
             isCurved: true,
             curveSmoothness: 0.35,
             color: AppColors.primary,
-            barWidth: 3,
+            barWidth: 3.2,
             isStrokeCapRound: true,
-            dotData: FlDotData(
-              show: logs.length <= 15,
-              getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                radius: 3.5,
-                color: AppColors.primary,
-                strokeWidth: 2,
-                strokeColor: AppColors.surface,
-              ),
-            ),
+            dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  AppColors.primary.withValues(alpha: 0.25),
+                  AppColors.primary.withValues(alpha: 0.22),
                   AppColors.primary.withValues(alpha: 0.0),
                 ],
               ),
             ),
+          ),
+
+          // 2. Secondary Dashed Line (Trend by default, Scale if toggled) - NO EXPLICIT POINTS
+          LineChartBarData(
+            spots: secondarySpots,
+            isCurved: true,
+            curveSmoothness: 0.35,
+            color: AppColors.textMuted.withValues(alpha: 0.65),
+            barWidth: 2.0,
+            dashArray: [6, 4],
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(show: false),
           ),
         ],
       ),
@@ -563,7 +744,6 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               ],
             ),
           ),
-
           if (_isHistoryExpanded) ...[
             const SizedBox(height: 12),
             if (logs.isEmpty)
@@ -599,9 +779,27 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${log.weightKg.toStringAsFixed(1)} kg',
-                style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: AppColors.primary, letterSpacing: -0.3),
+              Row(
+                children: [
+                  Text(
+                    '${log.weightKg.toStringAsFixed(1)} kg',
+                    style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w900, color: AppColors.textMain, letterSpacing: -0.3),
+                  ),
+                  if (log.trendWeightKg != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Trend: ${log.trendWeightKg!.toStringAsFixed(1)} kg',
+                        style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.primary),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 2),
               Text(
