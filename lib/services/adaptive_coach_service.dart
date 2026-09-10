@@ -49,8 +49,6 @@ class AdaptiveCoachService {
   final ValueNotifier<WeeklyCheckInProposal?> checkInProposalNotifier = ValueNotifier(null);
   final ValueNotifier<WeeklyCheckInProposal?> dismissedProposalNotifier = ValueNotifier(null);
   final ValueNotifier<AdaptiveCoachState?> liveObserverStateNotifier = ValueNotifier(null);
-
-  /// Holds the dynamically computed trend weights (Date -> kg) derived in memory
   final ValueNotifier<Map<String, double>> trendWeightsNotifier = ValueNotifier({});
 
   void resetState() {
@@ -113,27 +111,28 @@ class AdaptiveCoachService {
     );
 
     int studyDay = 0;
-    final List<double> recent14dCalories = [];
     final Map<String, double> computedTrendWeights = {};
 
     while (!cursor.isAfter(today)) {
       final dateKey = DateFormat('yyyy-MM-dd').format(cursor);
-      final isToday = cursor.year == today.year && cursor.month == today.month && cursor.day == today.day;
-
       final weightReading = dailyWeightsMap[dateKey];
-      final calorieTotal = dailyCaloriesMap[dateKey] ?? 0.0;
 
-      if (!isToday && calorieTotal >= 450.0) {
-        recent14dCalories.add(calorieTotal);
-        if (recent14dCalories.length > 14) {
-          recent14dCalories.removeAt(0);
+      // True 14-calendar-day lookback [t-14 ... t-1]
+      int validCount = 0;
+      double sumValidCals = 0.0;
+
+      for (int i = 1; i <= 14; i++) {
+        final lookbackDate = cursor.subtract(Duration(days: i));
+        final lookbackKey = DateFormat('yyyy-MM-dd').format(lookbackDate);
+        final dayCal = dailyCaloriesMap[lookbackKey] ?? 0.0;
+
+        if (dayCal >= 450.0) {
+          validCount++;
+          sumValidCals += dayCal;
         }
       }
 
-      final validCount = recent14dCalories.length;
-      final validMean = validCount > 0
-          ? (recent14dCalories.reduce((a, b) => a + b) / validCount)
-          : initialTdee;
+      final validMean = validCount > 0 ? (sumValidCals / validCount) : 0.0;
 
       currentState = AdaptiveCoachEngine.stepObserver(
         prevState: currentState,
@@ -148,7 +147,6 @@ class AdaptiveCoachService {
         activityMultiplier: activityMultiplier,
       );
 
-      // Record in-memory trend weight for every recorded day
       computedTrendWeights[dateKey] = currentState.estimatedMassKg;
 
       studyDay++;

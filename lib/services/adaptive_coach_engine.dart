@@ -1,20 +1,19 @@
 import 'dart:math' as math;
 
-/// State container representing the complete latent state of the observer & controller.
 class AdaptiveCoachState {
-  final double estimatedMassKg; // L_k
-  final double tissueVelocityKgPerDay; // v_k
+  final double estimatedMassKg;
+  final double tissueVelocityKgPerDay;
   final double p00;
   final double p01;
   final double p10;
   final double p11;
-  final double tdeeKcal; // μ_TDEE,k
-  final double latentIntakeBias; // b^{intake}_k
-  final double integratorKcalDays; // I_k
-  final double resVariance; // σ²_res,k
-  final double biasVariance; // σ²_bias,k
-  final double informationGain; // Ω_k
-  final double tissueEnthalpy; // ρ_W(F_k)
+  final double tdeeKcal;
+  final double latentIntakeBias;
+  final double integratorKcalDays;
+  final double resVariance;
+  final double biasVariance;
+  final double informationGain;
+  final double tissueEnthalpy;
 
   const AdaptiveCoachState({
     required this.estimatedMassKg,
@@ -56,45 +55,8 @@ class AdaptiveCoachState {
       tissueEnthalpy: enthalpy,
     );
   }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'estimated_mass_kg': estimatedMassKg,
-      'tissue_velocity_kg_day': tissueVelocityKgPerDay,
-      'p00': p00,
-      'p01': p01,
-      'p10': p10,
-      'p11': p11,
-      'tdee_kcal': tdeeKcal,
-      'latent_intake_bias': latentIntakeBias,
-      'integrator_kcal_days': integratorKcalDays,
-      'res_variance': resVariance,
-      'bias_variance': biasVariance,
-      'information_gain': informationGain,
-      'tissue_enthalpy': tissueEnthalpy,
-    };
-  }
-
-  factory AdaptiveCoachState.fromMap(Map<String, dynamic> data) {
-    return AdaptiveCoachState(
-      estimatedMassKg: (data['estimated_mass_kg'] as num?)?.toDouble() ?? 70.0,
-      tissueVelocityKgPerDay: (data['tissue_velocity_kg_day'] as num?)?.toDouble() ?? 0.0,
-      p00: (data['p00'] as num?)?.toDouble() ?? 0.10,
-      p01: (data['p01'] as num?)?.toDouble() ?? 0.001,
-      p10: (data['p10'] as num?)?.toDouble() ?? 0.001,
-      p11: (data['p11'] as num?)?.toDouble() ?? 0.0001,
-      tdeeKcal: (data['tdee_kcal'] as num?)?.toDouble() ?? 2000.0,
-      latentIntakeBias: (data['latent_intake_bias'] as num?)?.toDouble() ?? 0.88,
-      integratorKcalDays: (data['integrator_kcal_days'] as num?)?.toDouble() ?? 0.0,
-      resVariance: (data['res_variance'] as num?)?.toDouble() ?? 0.0050,
-      biasVariance: (data['bias_variance'] as num?)?.toDouble() ?? 0.00005,
-      informationGain: (data['information_gain'] as num?)?.toDouble() ?? 0.0,
-      tissueEnthalpy: (data['tissue_enthalpy'] as num?)?.toDouble() ?? 7700.0,
-    );
-  }
 }
 
-/// Output prescription containing the daily calorie budget and exact integer macronutrients.
 class PrescriptionVector {
   final int caloriesKcal;
   final int proteinG;
@@ -120,32 +82,28 @@ class PrescriptionVector {
 }
 
 class AdaptiveCoachEngine {
-  // Kinematic & Filter Constants
   static const double sigmaQL2 = 1.0e-3;
   static const double sigmaQv2 = 2.0e-5;
   static const double rwVariance = 0.35;
   static const double deltaPos = 0.70;
   static const double deltaNeg = 0.90;
+  static const double velocityDampingMissing = 0.90;
 
-  // Forbes Thermodynamic Constants
   static const double kappaForbes = 10.4;
   static const double rhoFat = 9400.0;
   static const double rhoLean = 1800.0;
 
-  // Latent Bias & Information Tracking Constants
   static const double alphaBias = 0.010;
   static const double lambdaRes = 0.05;
   static const double lambdaBias = 0.03;
-  static const double deltaMaxTdeeDaily = 18.0;
+  static const double maxTdeeDailyStep = 24.0;
 
-  // PI Controller Constants
   static const double kpGain = 4200.0;
   static const double kiGain = 45.0;
   static const double iMax = 50.0;
   static const double clinicalFloorKcal = 1200.0;
   static const double clinicalCeilingKcal = 4500.0;
 
-  /// Calculates baseline initial fat mass via Gallagher body composition regression.
   static double estimateInitialFatMass({
     required double weightKg,
     required double heightCm,
@@ -161,7 +119,6 @@ class AdaptiveCoachEngine {
     return weightKg * bfPct;
   }
 
-  /// Calculates baseline demographic BMR via Mifflin-St Jeor.
   static double calculateBmr({
     required double weightKg,
     required double heightCm,
@@ -176,22 +133,19 @@ class AdaptiveCoachEngine {
     }
   }
 
-  /// Steps the Observer forward by 1 discrete day (Δt = 1 day).
   static AdaptiveCoachState stepObserver({
     required AdaptiveCoachState prevState,
-    required double? scaleWeightLogKg, // W_k (null if unmeasured)
-    required double validMeanCalories14d, // C̄_k
-    required int validIntakeDaysCount, // N_c
+    required double? scaleWeightLogKg,
+    required double validMeanCalories14d,
+    required int validIntakeDaysCount,
     required double initialFatMassKg,
     required double heightCm,
     required int ageYears,
     required String gender,
-    required int studyDayIndex, // k
+    required int studyDayIndex,
     double activityMultiplier = 1.38,
   }) {
-    // -------------------------------------------------------------
-    // 1. Kinematic A Priori Prediction
-    // -------------------------------------------------------------
+    // 1. A Priori Prediction
     final xPredL = prevState.estimatedMassKg + prevState.tissueVelocityKgPerDay;
     final xPredV = prevState.tissueVelocityKgPerDay;
 
@@ -200,9 +154,7 @@ class AdaptiveCoachEngine {
     final pPred10 = pPred01;
     final pPred11 = prevState.p11 + sigmaQv2;
 
-    // -------------------------------------------------------------
-    // 2. Innovation & Asymmetric Huber Attenuation
-    // -------------------------------------------------------------
+    // 2. Innovation & Huber Attenuation
     double updatedL = xPredL;
     double updatedV = xPredV;
     double updatedP00 = pPred00;
@@ -234,46 +186,16 @@ class AdaptiveCoachEngine {
       updatedP01 = (1.0 - k0Star) * pPred01;
       updatedP10 = pPred10 - (k1Star * pPred00);
       updatedP11 = pPred11 - (k1Star * pPred01);
+    } else {
+      updatedV = xPredV * velocityDampingMissing;
+      updatedL = prevState.estimatedMassKg + updatedV;
     }
 
-    // -------------------------------------------------------------
-    // 3. Dynamic Forbes Enthalpy Evaluation
-    // -------------------------------------------------------------
+    // 3. Forbes Thermodynamics
     final pFat = initialFatMassKg / (initialFatMassKg + kappaForbes);
     final rhoW = (pFat * rhoFat) + ((1.0 - pFat) * rhoLean);
     final energyStoredFlux = updatedV * rhoW;
 
-    // -------------------------------------------------------------
-    // 4. Dual-Information Quality Assessment
-    // -------------------------------------------------------------
-    final qCoverage = ((validIntakeDaysCount - 3.0) / 8.0).clamp(0.0, 1.0);
-
-    final cImplied = prevState.tdeeKcal + energyStoredFlux;
-    final cImpliedSafe = math.max(1000.0, cImplied);
-    final rk = (validMeanCalories14d - (prevState.latentIntakeBias * cImpliedSafe)) / cImpliedSafe;
-
-    final updatedResVariance = ((1.0 - lambdaRes) * prevState.resVariance) + (lambdaRes * (rk * rk));
-
-    // Latent Bias Evolution
-    double updatedBias = prevState.latentIntakeBias;
-    if (validIntakeDaysCount >= 7 && studyDayIndex >= 21) {
-      final impliedIntake = math.max(1000.0, prevState.tdeeKcal + energyStoredFlux);
-      final observedRatio = validMeanCalories14d / impliedIntake;
-      updatedBias = ((1.0 - alphaBias) * prevState.latentIntakeBias) + (alphaBias * observedRatio);
-      updatedBias = updatedBias.clamp(0.60, 1.10);
-    }
-
-    final biasDelta = updatedBias - prevState.latentIntakeBias;
-    final updatedBiasVariance = ((1.0 - lambdaBias) * prevState.biasVariance) + (lambdaBias * (biasDelta * biasDelta));
-
-    final rReliability = math.exp(-updatedResVariance / (2.0 * 0.12 * 0.12)) *
-        math.exp(-updatedBiasVariance / (2.0 * 0.015 * 0.015));
-
-    final omegaK = qCoverage * rReliability;
-
-    // -------------------------------------------------------------
-    // 5. TDEE Posterior State Synthesis
-    // -------------------------------------------------------------
     final bmr = calculateBmr(
       weightKg: updatedL,
       heightCm: heightCm,
@@ -282,14 +204,54 @@ class AdaptiveCoachEngine {
     );
     final tdeePrior = bmr * activityMultiplier;
 
-    final safeBias = updatedBias.clamp(0.60, 1.10);
-    final tdeeThermo = (validMeanCalories14d / safeBias) - energyStoredFlux;
+    // 4. Quality & Bias with Expenditure Freeze Gate
+    final bool hasSufficientIntake = validIntakeDaysCount >= 4 && validMeanCalories14d > 0;
 
-    final tdeeTarget = ((1.0 - omegaK) * tdeePrior) + (omegaK * tdeeThermo);
-    final tdeeBounded = tdeeTarget.clamp(1.05 * bmr, 2.10 * bmr);
+    double omegaK = 0.0;
+    double updatedBias = prevState.latentIntakeBias;
+    double updatedResVariance = prevState.resVariance;
+    double updatedBiasVariance = prevState.biasVariance;
+    double? tdeeThermo;
 
-    final tdeeDelta = (tdeeBounded - prevState.tdeeKcal).clamp(-deltaMaxTdeeDaily, deltaMaxTdeeDaily);
-    final updatedTdee = prevState.tdeeKcal + ((0.05 + (0.03 * omegaK)) * tdeeDelta);
+    if (hasSufficientIntake) {
+      final qCoverage = ((validIntakeDaysCount - 3.0) / 8.0).clamp(0.0, 1.0);
+      final cImplied = math.max(1000.0, prevState.tdeeKcal + energyStoredFlux);
+      final rk = (validMeanCalories14d - (prevState.latentIntakeBias * cImplied)) / cImplied;
+
+      updatedResVariance = ((1.0 - lambdaRes) * prevState.resVariance) + (lambdaRes * (rk * rk));
+
+      if (validIntakeDaysCount >= 7 && studyDayIndex >= 21) {
+        final observedRatio = validMeanCalories14d / cImplied;
+        updatedBias = ((1.0 - alphaBias) * prevState.latentIntakeBias) + (alphaBias * observedRatio);
+        updatedBias = updatedBias.clamp(0.60, 1.10);
+      }
+
+      final biasDelta = updatedBias - prevState.latentIntakeBias;
+      updatedBiasVariance = ((1.0 - lambdaBias) * prevState.biasVariance) + (lambdaBias * (biasDelta * biasDelta));
+
+      final rReliability = math.exp(-updatedResVariance / (2.0 * 0.12 * 0.12)) *
+          math.exp(-updatedBiasVariance / (2.0 * 0.015 * 0.015));
+
+      omegaK = qCoverage * rReliability;
+
+      final safeBias = updatedBias.clamp(0.60, 1.10);
+      tdeeThermo = (validMeanCalories14d / safeBias) - energyStoredFlux;
+    }
+
+    // 5. Posterior TDEE with Expenditure Freeze Guard
+    double updatedTdee = prevState.tdeeKcal;
+
+    if (hasSufficientIntake && tdeeThermo != null) {
+      final tdeeTarget = ((1.0 - omegaK) * tdeePrior) + (omegaK * tdeeThermo);
+      final tdeeBounded = tdeeTarget.clamp(1.05 * bmr, 2.10 * bmr);
+
+      final learningRate = 0.05 + (0.15 * omegaK);
+      final rawStep = (tdeeBounded - prevState.tdeeKcal) * learningRate;
+      final clampedStep = rawStep.clamp(-maxTdeeDailyStep, maxTdeeDailyStep);
+      updatedTdee = prevState.tdeeKcal + clampedStep;
+    } else if (studyDayIndex == 0) {
+      updatedTdee = tdeePrior;
+    }
 
     return AdaptiveCoachState(
       estimatedMassKg: updatedL,
@@ -308,13 +270,12 @@ class AdaptiveCoachEngine {
     );
   }
 
-  /// Synthesizes the Closed-Loop PI Target and Integer Macronutrient Vector.
   static PrescriptionVector synthesizePrescription({
     required AdaptiveCoachState currentState,
-    required double initialPhaseMassKg, // L_0
-    required double targetWeeklyWeightDeltaKg, // e.g. -0.50 kg/week
-    required int phaseDayIndex, // k (days elapsed in current phase)
-    required double proteinMultiplierGPerKg, // e.g. 2.0 g/kg
+    required double initialPhaseMassKg,
+    required double targetWeeklyWeightDeltaKg,
+    required int phaseDayIndex,
+    required double proteinMultiplierGPerKg,
     double lipidFloorMultiplierGPerKg = 0.60,
   }) {
     final vTarget = targetWeeklyWeightDeltaKg / 7.0;
@@ -324,31 +285,23 @@ class AdaptiveCoachEngine {
     final eV = currentState.tissueVelocityKgPerDay - vTarget;
 
     final updatedIntegrator = (currentState.integratorKcalDays + (ePos * 1.0)).clamp(-iMax, iMax);
-
     final deltaPI = (kpGain * eV) + (kiGain * updatedIntegrator);
 
-    final eNominal = currentState.tdeeKcal + (vTarget * currentState.tissueEnthalpy);
+    // Direct goal offset (preserves exact target deficit/surplus)
+    final nominalDeficitKcal = (targetWeeklyWeightDeltaKg * 7700.0) / 7.0;
+    final eNominal = currentState.tdeeKcal + nominalDeficitKcal;
     final eTargetContinuous = (eNominal - deltaPI).clamp(clinicalFloorKcal, clinicalCeilingKcal);
     final int eTarget = eTargetContinuous.round();
 
-    // -------------------------------------------------------------
-    // Macronutrient Allocation
-    // -------------------------------------------------------------
     final int proteinG = (currentState.estimatedMassKg * proteinMultiplierGPerKg).round();
-    final int energyProtein = proteinG * 4;
-
     final double lipidFloorG = currentState.estimatedMassKg * lipidFloorMultiplierGPerKg;
     final double lipidNominalG = (0.25 * eTargetContinuous) / 9.0;
     int fatG = math.max(lipidFloorG, lipidNominalG).round();
-    int energyFat = fatG * 9;
 
-    double energyCarbs = eTargetContinuous - (energyProtein + energyFat);
-
-    // Feasibility Slack Check
+    double energyCarbs = eTargetContinuous - (proteinG * 4 + fatG * 9);
     if (energyCarbs < (0.10 * eTargetContinuous)) {
       fatG = lipidFloorG.round();
-      energyFat = fatG * 9;
-      energyCarbs = eTargetContinuous - (energyProtein + energyFat);
+      energyCarbs = eTargetContinuous - (proteinG * 4 + fatG * 9);
     }
 
     final int carbsG = math.max(30.0, energyCarbs / 4.0).round();
