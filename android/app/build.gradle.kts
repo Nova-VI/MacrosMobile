@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.macrotracker.macro_tracker_mobile"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {

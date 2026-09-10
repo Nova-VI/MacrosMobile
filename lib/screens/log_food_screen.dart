@@ -10,6 +10,7 @@ import '../services/usda_service.dart';
 import '../services/gemini_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/emoji_picker_sheet.dart';
+import '../widgets/barcode_scanner_sheet.dart';
 
 class LogFoodScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -183,9 +184,15 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _servingUnitController.text = log.servingName;
 
     final baseServingG = log.servings > 0 ? (log.servingSizeG / log.servings) : 100.0;
-    _servingSizeController.text = (baseServingG % 1 == 0) ? baseServingG.toInt().toString() : baseServingG.toStringAsFixed(1);
-    _servingsController.text = (log.servings % 1 == 0) ? log.servings.toInt().toString() : log.servings.toStringAsFixed(2);
-    _totalAmountController.text = (log.servingSizeG % 1 == 0) ? log.servingSizeG.toInt().toString() : log.servingSizeG.toStringAsFixed(1);
+    _servingSizeController.text = (baseServingG % 1 == 0)
+        ? baseServingG.toInt().toString()
+        : baseServingG.toStringAsFixed(1);
+    _servingsController.text = (log.servings % 1 == 0)
+        ? log.servings.toInt().toString()
+        : log.servings.toStringAsFixed(2);
+    _totalAmountController.text = (log.servingSizeG % 1 == 0)
+        ? log.servingSizeG.toInt().toString()
+        : log.servingSizeG.toStringAsFixed(1);
 
     _proteinController.text = log.macros.proteinG > 0 ? log.macros.proteinG.toStringAsFixed(1) : '';
     _carbsController.text = log.macros.carbsG > 0 ? log.macros.carbsG.toStringAsFixed(1) : '';
@@ -254,6 +261,116 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _calciumController.dispose();
     _ironController.dispose();
     super.dispose();
+  }
+
+  void _openBarcodeScanner() {
+    HapticFeedback.lightImpact();
+    BarcodeScannerSheet.show(
+      context,
+      onFoodFound: (scannedFood, {bool isUnreliable = false}) {
+        _populateFromScannedFood(scannedFood, isUnreliable: isUnreliable);
+      },
+      onNotFound: (message) {
+        _showToast(message, isError: true);
+      },
+    );
+  }
+
+  void _populateFromScannedFood(FoodItem food, {bool isUnreliable = false}) {
+    _editingLogId = null;
+    _isLibraryBound = false;
+    _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
+    _selectedBaseUnit = food.baseUnit;
+    _nameController.text = food.name;
+    _servingUnitController.text = food.servingName;
+
+    final baseG = (food.servingSizeG > 0) ? food.servingSizeG : 100.0;
+    _servingSizeController.text = (baseG % 1 == 0)
+        ? baseG.toInt().toString()
+        : baseG.toStringAsFixed(1);
+    _servingsController.text = '1';
+    _totalAmountController.text = _servingSizeController.text;
+
+    if (isUnreliable) {
+      _proteinController.clear();
+      _carbsController.clear();
+      _fatController.clear();
+      _caloriesController.clear();
+
+      _fiberController.clear();
+      _sugarController.clear();
+      _sodiumController.clear();
+      _satFatController.clear();
+      _cholesterolController.clear();
+      _potassiumController.clear();
+      _vitAController.clear();
+      _vitCController.clear();
+      _vitDController.clear();
+      _calciumController.clear();
+      _ironController.clear();
+
+      _currentBaseFood = FoodItem(
+        id: '',
+        name: food.name,
+        source: food.source,
+        servingSizeG: baseG,
+        baseUnit: food.baseUnit,
+        servingName: food.servingName,
+        emoji: _selectedEmoji,
+        macros: const MacroNutrients(),
+        micros: const MicroNutrients(),
+      );
+
+      _showToast(
+        'Found "${food.name}", but nutrition facts are missing. Please enter macros manually.',
+        isError: true,
+      );
+    } else {
+      final pro = food.macros.proteinG;
+      final carb = food.macros.carbsG;
+      final fat = food.macros.fatG;
+      final dynamicCalories = (pro * 4.0) + (carb * 4.0) + (fat * 9.0);
+
+      _proteinController.text = pro > 0 ? pro.toStringAsFixed(1) : '';
+      _carbsController.text = carb > 0 ? carb.toStringAsFixed(1) : '';
+      _fatController.text = fat > 0 ? fat.toStringAsFixed(1) : '';
+      _caloriesController.text = dynamicCalories > 0 ? dynamicCalories.round().toString() : '';
+
+      final mic = food.micros;
+      _fiberController.text = mic.fiberG > 0 ? mic.fiberG.toStringAsFixed(1) : '';
+      _sugarController.text = mic.sugarG > 0 ? mic.sugarG.toStringAsFixed(1) : '';
+      _sodiumController.text = mic.sodiumMg > 0 ? mic.sodiumMg.round().toString() : '';
+      _satFatController.text = mic.saturatedFatG > 0 ? mic.saturatedFatG.toStringAsFixed(1) : '';
+      _cholesterolController.text = mic.cholesterolMg > 0 ? mic.cholesterolMg.round().toString() : '';
+      _potassiumController.text = mic.potassiumMg > 0 ? mic.potassiumMg.round().toString() : '';
+      _vitAController.text = mic.vitaminAUg > 0 ? mic.vitaminAUg.round().toString() : '';
+      _vitCController.text = mic.vitaminCMg > 0 ? mic.vitaminCMg.toStringAsFixed(1) : '';
+      _vitDController.text = mic.vitaminDUg > 0 ? mic.vitaminDUg.toStringAsFixed(1) : '';
+      _calciumController.text = mic.calciumMg > 0 ? mic.calciumMg.round().toString() : '';
+      _ironController.text = mic.ironMg > 0 ? mic.ironMg.toStringAsFixed(1) : '';
+
+      _currentBaseFood = FoodItem(
+        id: '',
+        name: food.name,
+        source: food.source,
+        servingSizeG: baseG,
+        baseUnit: food.baseUnit,
+        servingName: food.servingName,
+        emoji: _selectedEmoji,
+        macros: MacroNutrients(
+          proteinG: pro,
+          carbsG: carb,
+          fatG: fat,
+          calories: dynamicCalories,
+        ),
+        micros: mic,
+      );
+
+      _showToast('Found "${food.name}"');
+    }
+
+    setState(() {});
+    _updateFloatingButtonVisibility();
   }
 
   void _onSearchChanged(String query) {
@@ -331,7 +448,9 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
     _selectedBaseUnit = food.baseUnit;
     _servingUnitController.text = food.servingName;
-    _servingSizeController.text = (food.servingSizeG % 1 == 0) ? food.servingSizeG.toInt().toString() : food.servingSizeG.toStringAsFixed(1);
+    _servingSizeController.text = (food.servingSizeG % 1 == 0)
+        ? food.servingSizeG.toInt().toString()
+        : food.servingSizeG.toStringAsFixed(1);
 
     if (preserveTypedName == null) {
       _nameController.text = food.name;
@@ -366,7 +485,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _fatController.text = fat > 0 ? fat.toStringAsFixed(1) : '';
 
     if (!_isManualCalories) {
-      final cals = (pro * 4) + (carb * 4) + (fat * 9);
+      final cals = (pro * 4.0) + (carb * 4.0) + (fat * 9.0);
       _caloriesController.text = cals > 0 ? cals.round().toString() : '';
     } else {
       final manualCals = m.calories * multiplier;
@@ -437,32 +556,36 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   }
 
   void _onManualNutrientTyped() {
-    if (_isLibraryBound && _editingLogId == null) return;
     final mult = double.tryParse(_servingsController.text) ?? 1.0;
     final m = mult > 0 ? mult : 1.0;
 
-    final p = (double.tryParse(_proteinController.text) ?? 0.0) / m;
-    final c = (double.tryParse(_carbsController.text) ?? 0.0) / m;
-    final f = (double.tryParse(_fatController.text) ?? 0.0) / m;
-    double cals;
+    final p = double.tryParse(_proteinController.text) ?? 0.0;
+    final c = double.tryParse(_carbsController.text) ?? 0.0;
+    final f = double.tryParse(_fatController.text) ?? 0.0;
 
     if (!_isManualCalories) {
-      cals = (p * 4) + (c * 4) + (f * 9);
-      final displayCals = (p * 4 * m) + (c * 4 * m) + (f * 9 * m);
+      final displayCals = (p * 4.0) + (c * 4.0) + (f * 9.0);
       _caloriesController.text = displayCals > 0 ? displayCals.round().toString() : '';
-    } else {
-      cals = (double.tryParse(_caloriesController.text) ?? 0.0) / m;
     }
 
+    final baseP = p / m;
+    final baseC = c / m;
+    final baseF = f / m;
+    final baseCal = !_isManualCalories
+        ? (baseP * 4.0) + (baseC * 4.0) + (baseF * 9.0)
+        : (double.tryParse(_caloriesController.text) ?? 0.0) / m;
+
     _currentBaseFood = FoodItem(
-      id: _editingLogId != null ? (_currentBaseFood?.id ?? '') : '',
+      id: _editingLogId != null
+          ? (_currentBaseFood?.id ?? '')
+          : (_isLibraryBound ? (_currentBaseFood?.id ?? '') : ''),
       name: _nameController.text.trim(),
-      source: 'custom',
+      source: _currentBaseFood?.source ?? 'custom',
       servingSizeG: double.tryParse(_servingSizeController.text) ?? 100.0,
       baseUnit: _selectedBaseUnit,
       servingName: _servingUnitController.text.trim(),
       emoji: _selectedEmoji,
-      macros: MacroNutrients(proteinG: p, carbsG: c, fatG: f, calories: cals),
+      macros: MacroNutrients(proteinG: baseP, carbsG: baseC, fatG: baseF, calories: baseCal),
       micros: _getParsedMicros().scale(1.0 / m),
     );
     _updateFloatingButtonVisibility();
@@ -512,12 +635,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: _getParsedMicros().scale(mult > 0 ? 1.0 / mult : 1.0),
     );
 
-    // 0ms instant feedback
     HapticFeedback.mediumImpact();
     _showToast('"$name" saved to library!');
     _resetToNewQuickLog();
 
-    // Background persistence
     _firestoreService.addFood(item).then((id) {
       if (_selectedEmoji == '🍽️') {
         _handleBackgroundAiEmoji(id, null, name);
@@ -609,7 +730,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: micros,
     );
 
-    // 0ms instant UI reaction
     HapticFeedback.mediumImpact();
     if (_editingLogId != null) {
       _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
@@ -674,7 +794,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   ),
                   onPressed: () {
                     Navigator.pop(ctx, true);
-                    // 0ms instant UI dismiss
                     _firestoreService.deleteLog(_editingLogId!);
                     HapticFeedback.mediumImpact();
                     _showToast('Daily log entry deleted.');
@@ -844,43 +963,78 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   }
 
   Widget _buildSearchField() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        onTap: () => _selectAll(_searchController),
-        style: const TextStyle(color: AppColors.textMain),
-        decoration: InputDecoration(
-          hintText: 'Search foods (e.g. Chicken breast)...',
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
-          suffixIcon: _isSearching
-              ?  Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                  ),
-                )
-              : _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        _onSearchChanged('');
-                      },
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onSearchChanged,
+            onTap: () => _selectAll(_searchController),
+            style: const TextStyle(color: AppColors.textMain, fontSize: 14),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surface,
+              isDense: true,
+              hintText: 'Search foods (e.g. Chicken breast)...',
+              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+              suffixIcon: _isSearching
+                  ? Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                      ),
                     )
-                  : null,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
+                  : _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            _onSearchChanged('');
+                          },
+                        )
+                      : null,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(20),
+                borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+              ),
+            ),
+          ),
         ),
-      ),
+        const SizedBox(width: 10),
+        InkWell(
+          onTap: _openBarcodeScanner,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.45),
+                width: 1.2,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.qr_code_scanner_rounded,
+              color: AppColors.primary,
+              size: 22,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1293,7 +1447,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               setState(() => _isManualCalories = v.isNotEmpty);
               _onManualNutrientTyped();
             },
-            style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Calories (kcal)',
               suffixIcon: _isManualCalories
@@ -1304,7 +1458,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                         color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child:  Text('✎ manual', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        '✎ manual',
+                        style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
                     )
                   : null,
               suffixIconConstraints: const BoxConstraints(minHeight: 24, minWidth: 24),
@@ -1326,8 +1483,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _isMicrosExpanded ? 'Hide Micronutrients' : 'Show Micronutrients',
-                    style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
+                    'Hide Micronutrients',
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                 ],
               ),

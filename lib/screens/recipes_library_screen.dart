@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../widgets/edit_food_sheet.dart';
 import '../widgets/recipe_nutrition_sheet.dart';
 import '../widgets/emoji_picker_sheet.dart';
+import '../widgets/barcode_scanner_sheet.dart';
 
 class RecipesLibraryScreen extends StatefulWidget {
   final int initialTabIndex;
@@ -138,7 +139,9 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     }
 
     final allFoods = _firestoreService.foodsNotifier.value;
-    final localMatches = allFoods.where((f) => f.name.toLowerCase().contains(query) && f.source != 'composite').toList();
+    final localMatches = allFoods
+        .where((f) => f.name.toLowerCase().contains(query) && f.source != 'composite')
+        .toList();
 
     setState(() {
       _ingredientLocalResults = localMatches;
@@ -168,20 +171,37 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24), side: const BorderSide(color: AppColors.border)),
-        title: Text('Amount of ${food.name}', style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text(
+          'Amount of ${food.name}',
+          style: const TextStyle(
+            color: AppColors.textMain,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Enter weight used in grams:', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const Text(
+              'Enter weight used in grams:',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _ingredientWeightController,
               onTap: () => _selectAll(_ingredientWeightController),
               autofocus: true,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 16),
+              style: const TextStyle(
+                color: AppColors.textMain,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
               decoration: const InputDecoration(labelText: 'Weight (g)'),
             ),
           ],
@@ -297,8 +317,14 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
-        title: const Text('Delete Recipe', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text(
+          'Delete Recipe',
+          style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+        ),
         content: Text(
           'Remove "${_recipeNameController.text.isNotEmpty ? _recipeNameController.text : 'this recipe'}" from your library? Past daily logs will remain intact.',
           style: const TextStyle(color: AppColors.textMuted),
@@ -378,7 +404,10 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
         backgroundColor: isError ? AppColors.danger : AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -485,33 +514,84 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
           physics: const BouncingScrollPhysics(),
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: TextField(
-                controller: _librarySearchController,
-                onChanged: (_) => setState(() {}),
-                style: const TextStyle(color: AppColors.textMain),
-                decoration: InputDecoration(
-                  hintText: 'Search saved library foods...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
-                  suffixIcon: _librarySearchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
-                          onPressed: () {
-                            _librarySearchController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: TextField(
+                        controller: _librarySearchController,
+                        onChanged: (_) => setState(() {}),
+                        style: const TextStyle(color: AppColors.textMain, fontSize: 14),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: false,
+                          hintText: 'Search saved library foods...',
+                          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                          suffixIcon: _librarySearchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded, color: AppColors.textMuted, size: 18),
+                                  onPressed: () {
+                                    _librarySearchController.clear();
+                                    setState(() {});
+                                  },
+                                )
+                              : null,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    BarcodeScannerSheet.show(
+                      context,
+                      onFoodFound: (scannedFood, {bool isUnreliable = false}) {
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: Colors.transparent,
+                          isScrollControlled: true,
+                          builder: (ctx) => EditFoodSheet(food: scannedFood),
+                        );
+                      },
+                      onNotFound: (message) {
+                        _showToast(message, isError: true);
+                      },
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.45),
+                        width: 1.2,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.qr_code_scanner_rounded,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             SizedBox(
@@ -575,13 +655,16 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
   Widget _buildLibraryItemCard(FoodItem food) {
     final isComposite = food.source == 'composite';
     final badgeLabel = isComposite ? 'RECIPE' : food.source.toUpperCase();
-    final badgeColor = isComposite ? const Color(0xFF9333EA) : (food.source == 'usda' ? AppColors.secondary : AppColors.primary);
+    final badgeColor = isComposite
+        ? const Color(0xFF9333EA)
+        : (food.source == 'usda' ? AppColors.secondary : AppColors.primary);
 
     final int cVal = food.macros.calories.round();
     final String pVal = _formatAmount(food.macros.proteinG);
     final String cCarbVal = _formatAmount(food.macros.carbsG);
     final String fVal = _formatAmount(food.macros.fatG);
-    final String basePortion = '${food.servingSizeG.round()}${food.baseUnit}${food.servingName.isNotEmpty ? ' (${food.servingName})' : ''}';
+    final String basePortion =
+        '${food.servingSizeG.round()}${food.baseUnit}${food.servingName.isNotEmpty ? ' (${food.servingName})' : ''}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -594,7 +677,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Standalone large emoji
             Padding(
               padding: const EdgeInsets.only(right: 12, left: 2),
               child: Text(
@@ -602,8 +684,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                 style: const TextStyle(fontSize: 28),
               ),
             ),
-
-            // Title & Inline Macros
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,7 +712,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                         ),
                         child: Text(
                           badgeLabel,
-                          style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w800, color: badgeColor),
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            color: badgeColor,
+                          ),
                         ),
                       ),
                     ],
@@ -643,39 +727,66 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                       children: [
                         TextSpan(
                           text: '$cVal',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textMain,
+                          ),
                         ),
                         TextSpan(
                           text: 'cal  ',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary.withValues(alpha: 0.95)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary.withValues(alpha: 0.95),
+                          ),
                         ),
                         TextSpan(
                           text: '$pVal',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textMain,
+                          ),
                         ),
                         TextSpan(
                           text: 'p  ',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.protein.withValues(alpha: 0.95),
+                          ),
                         ),
                         TextSpan(
                           text: '$cCarbVal',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textMain,
+                          ),
                         ),
                         TextSpan(
                           text: 'c  ',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.carbs.withValues(alpha: 0.95),
+                          ),
                         ),
                         TextSpan(
                           text: '$fVal',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textMain,
+                          ),
                         ),
                         TextSpan(
                           text: 'f',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.fat.withValues(alpha: 0.95),
+                          ),
                         ),
                         TextSpan(
                           text: ' • $basePortion',
-                          style: const TextStyle(fontWeight: FontWeight.w500, color: AppColors.textMuted),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -686,8 +797,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                 ],
               ),
             ),
-
-            // Actions: Favorite and Edit button only (Trash removed from card)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -745,9 +854,16 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
         children: [
           Icon(Icons.menu_book_rounded, size: 36, color: AppColors.textMuted),
           SizedBox(height: 12),
-          Text('No Foods Found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+          Text(
+            'No Foods Found',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
+          ),
           SizedBox(height: 4),
-          Text('Save custom items while logging or build composite meals with the Recipe Composer.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4)),
+          Text(
+            'Save custom items while logging or build composite meals with the Recipe Composer.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4),
+          ),
         ],
       ),
     );
@@ -769,8 +885,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
         const SizedBox(height: 14),
         _buildRecipeTotalsCard(totalMacros),
         const SizedBox(height: 14),
-
-        // Actions: Delete button appears when editing
         if (_editingRecipeId != null) ...[
           Row(
             children: [
@@ -836,7 +950,10 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                       _recipeIngredients.clear();
                     });
                   },
-                  child: const Text('Cancel Edit', style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Cancel Edit',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
                 ),
             ],
           ),
@@ -908,20 +1025,80 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
           ),
           const SizedBox(height: 10),
-          TextField(
-            controller: _ingredientSearchController,
-            onChanged: _onIngredientSearchChanged,
-            style: const TextStyle(color: AppColors.textMain),
-            decoration: InputDecoration(
-              hintText: 'Search ingredient from library or USDA...',
-              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
-              suffixIcon: _isSearchingIngredients
-                  ?  Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-                    )
-                  : null,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: TextField(
+                      controller: _ingredientSearchController,
+                      onChanged: _onIngredientSearchChanged,
+                      style: const TextStyle(color: AppColors.textMain, fontSize: 14),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: false,
+                        hintText: 'Search or scan ingredient...',
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
+                        suffixIcon: _isSearchingIngredients
+                            ? Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                ),
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  BarcodeScannerSheet.show(
+                    context,
+                    onFoodFound: (food, {bool isUnreliable = false}) {
+                      _openIngredientWeightModal(food);
+                    },
+                    onNotFound: (message) {
+                      _showToast(message, isError: true);
+                    },
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.45),
+                      width: 1.2,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.qr_code_scanner_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ],
           ),
           if (_ingredientLocalResults.isNotEmpty || _ingredientUsdaResults.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -942,7 +1119,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                           dense: true,
                           leading: Text(food.emoji, style: const TextStyle(fontSize: 20)),
                           title: Text(food.name, style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w600, fontSize: 13)),
-                          trailing:  Text('LIBRARY', style: TextStyle(color: AppColors.primary, fontSize: 9.5, fontWeight: FontWeight.w800)),
+                          trailing: Text('LIBRARY', style: TextStyle(color: AppColors.primary, fontSize: 9.5, fontWeight: FontWeight.w800)),
                           onTap: () => _openIngredientWeightModal(food),
                         )),
                     ..._ingredientUsdaResults.map((usda) => ListTile(
@@ -980,16 +1157,18 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('INGREDIENTS LIST', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5)),
-              Text('${_recipeIngredients.length} added', style:  TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
+              Text('${_recipeIngredients.length} added', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.primary)),
             ],
           ),
           const SizedBox(height: 10),
-
           if (_recipeIngredients.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: Text('No ingredients added yet. Search above to add items.', style: TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
+                child: Text(
+                  'No ingredients added yet. Search or scan above to add items.',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                ),
               ),
             )
           else

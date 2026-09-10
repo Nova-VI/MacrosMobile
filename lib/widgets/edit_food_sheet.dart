@@ -43,6 +43,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
 
   late String _selectedEmoji;
   late String _selectedBaseUnit;
+  bool _isManualCalories = false;
   bool _isMicrosExpanded = false;
 
   @override
@@ -54,13 +55,23 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
 
     _nameController = TextEditingController(text: f.name);
     _servingGController = TextEditingController(
-      text: (f.servingSizeG % 1 == 0) ? f.servingSizeG.toInt().toString() : f.servingSizeG.toStringAsFixed(1),
+      text: (f.servingSizeG % 1 == 0)
+          ? f.servingSizeG.toInt().toString()
+          : f.servingSizeG.toStringAsFixed(1),
     );
     _servingUnitController = TextEditingController(text: f.servingName);
-    _proteinController = TextEditingController(text: f.macros.proteinG.toStringAsFixed(1));
-    _carbsController = TextEditingController(text: f.macros.carbsG.toStringAsFixed(1));
-    _fatController = TextEditingController(text: f.macros.fatG.toStringAsFixed(1));
-    _caloriesController = TextEditingController(text: f.macros.calories.round().toString());
+    _proteinController = TextEditingController(
+      text: f.macros.proteinG > 0 ? f.macros.proteinG.toStringAsFixed(1) : '',
+    );
+    _carbsController = TextEditingController(
+      text: f.macros.carbsG > 0 ? f.macros.carbsG.toStringAsFixed(1) : '',
+    );
+    _fatController = TextEditingController(
+      text: f.macros.fatG > 0 ? f.macros.fatG.toStringAsFixed(1) : '',
+    );
+    _caloriesController = TextEditingController(
+      text: f.macros.calories > 0 ? f.macros.calories.round().toString() : '',
+    );
     _densityController = TextEditingController(text: f.density.toStringAsFixed(2));
 
     final m = f.micros;
@@ -109,6 +120,16 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     });
   }
 
+  void _onMacroChanged() {
+    if (!_isManualCalories) {
+      final p = double.tryParse(_proteinController.text) ?? 0.0;
+      final c = double.tryParse(_carbsController.text) ?? 0.0;
+      final f = double.tryParse(_fatController.text) ?? 0.0;
+      final calculatedCalories = (p * 4.0) + (c * 4.0) + (f * 9.0);
+      _caloriesController.text = calculatedCalories > 0 ? calculatedCalories.round().toString() : '';
+    }
+  }
+
   void _openEmojiPicker() {
     showModalBottomSheet(
       context: context,
@@ -126,9 +147,18 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: AppColors.border)),
-        title: const Text('Delete Food', style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800)),
-        content: Text('Remove "${widget.food.name}" from your library? Past daily logs will remain intact.', style: const TextStyle(color: AppColors.textMuted)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: const Text(
+          'Delete Food',
+          style: TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'Remove "${widget.food.name}" from your library? Past daily logs will remain intact.',
+          style: const TextStyle(color: AppColors.textMuted),
+        ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
@@ -156,8 +186,8 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () {
-                    Navigator.pop(ctx, true); // Close confirmation dialog
-                    Navigator.pop(context); // Close bottom sheet immediately
+                    Navigator.pop(ctx, true);
+                    Navigator.pop(context);
                     FirestoreService().deleteFood(widget.food.id);
                     HapticFeedback.mediumImpact();
                   },
@@ -175,6 +205,11 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
+    final p = double.tryParse(_proteinController.text) ?? 0.0;
+    final c = double.tryParse(_carbsController.text) ?? 0.0;
+    final f = double.tryParse(_fatController.text) ?? 0.0;
+    final cal = double.tryParse(_caloriesController.text) ?? ((p * 4.0) + (c * 4.0) + (f * 9.0));
+
     final updatedItem = FoodItem(
       id: widget.food.id,
       name: name,
@@ -187,10 +222,10 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       isFavorite: widget.food.isFavorite,
       density: double.tryParse(_densityController.text) ?? 1.0,
       macros: MacroNutrients(
-        proteinG: double.tryParse(_proteinController.text) ?? 0.0,
-        carbsG: double.tryParse(_carbsController.text) ?? 0.0,
-        fatG: double.tryParse(_fatController.text) ?? 0.0,
-        calories: double.tryParse(_caloriesController.text) ?? 0.0,
+        proteinG: p,
+        carbsG: c,
+        fatG: f,
+        calories: cal,
       ),
       micros: MicroNutrients(
         fiberG: double.tryParse(_fiberController.text) ?? 0.0,
@@ -208,7 +243,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       ingredients: widget.food.ingredients,
     );
 
-    // 0ms instant dismiss
     Navigator.pop(context);
     HapticFeedback.mediumImpact();
     FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
@@ -374,7 +408,10 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                   controller: _caloriesController,
                   onTap: () => _selectAll(_caloriesController),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+                  onChanged: (v) {
+                    setState(() => _isManualCalories = v.isNotEmpty);
+                  },
+                  style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
                   decoration: const InputDecoration(labelText: 'Calories (kcal)'),
                 ),
                 const SizedBox(height: 14),
@@ -391,7 +428,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                           size: 20,
                         ),
                         const SizedBox(width: 4),
-                         Text(
+                        Text(
                           'Advanced Micronutrients',
                           style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                         ),
@@ -500,6 +537,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       controller: controller,
       onTap: () => _selectAll(controller),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (_) => _onMacroChanged(),
       style: const TextStyle(color: AppColors.textMain, fontWeight: FontWeight.w800, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
