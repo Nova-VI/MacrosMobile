@@ -64,8 +64,8 @@ class TargetAdjustment {
 class GoalPhase {
   final String id;
   final String startDate; // YYYY-MM-DD
-  final String? endDate;   // YYYY-MM-DD, null if active
-  final String goal;       // Surplus/deficit offset (e.g. '-500', '0', '+250')
+  final String? endDate; // YYYY-MM-DD, null if active
+  final String goal; // Surplus/deficit offset (e.g. '-500', '0', '+250')
   final GoalType goalType;
   final double initialCalories;
   final double initialProteinG;
@@ -137,51 +137,25 @@ class GoalPhase {
   }
 }
 
-class GoalHistoryEntry {
+/// Resolved target representation for any given day in history.
+class DayTarget {
   final String date;
   final double targetCalories;
   final double targetProteinG;
   final double targetCarbsG;
   final double targetFatG;
   final String goal;
+  final GoalType goalType;
 
-  GoalHistoryEntry({
+  DayTarget({
     required this.date,
     required this.targetCalories,
     required this.targetProteinG,
     required this.targetCarbsG,
     required this.targetFatG,
     required this.goal,
+    required this.goalType,
   });
-
-  factory GoalHistoryEntry.fromMap(Map<String, dynamic> data) {
-    return GoalHistoryEntry(
-      date: data['date'] ?? '',
-      targetCalories: (data['target_calories'] as num?)?.toDouble() ?? 2000.0,
-      targetProteinG: (data['target_protein_g'] as num?)?.toDouble() ?? 150.0,
-      targetCarbsG: (data['target_carbs_g'] as num?)?.toDouble() ?? 200.0,
-      targetFatG: (data['target_fat_g'] as num?)?.toDouble() ?? 65.0,
-      goal: data['goal']?.toString() ?? '0',
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'date': date,
-      'target_calories': targetCalories,
-      'target_protein_g': targetProteinG,
-      'target_carbs_g': targetCarbsG,
-      'target_fat_g': targetFatG,
-      'goal': goal,
-    };
-  }
-
-  GoalType get goalType {
-    final val = double.tryParse(goal) ?? 0.0;
-    if (val < -50) return GoalType.cut;
-    if (val > 50) return GoalType.bulk;
-    return GoalType.maintain;
-  }
 }
 
 class UserProfile {
@@ -198,7 +172,7 @@ class UserProfile {
   final String activity;
   final String goal;
   final String proteinMultiplier;
-  final List<GoalHistoryEntry> goalHistory;
+  final double? estimatedTdee; // In-memory calibrated expenditure synced to Firestore
   final List<GoalPhase> goalPhases;
 
   UserProfile({
@@ -215,7 +189,7 @@ class UserProfile {
     this.activity = '1.2',
     this.goal = '0',
     this.proteinMultiplier = '2.0',
-    this.goalHistory = const [],
+    this.estimatedTdee,
     this.goalPhases = const [],
   });
 
@@ -249,11 +223,6 @@ class UserProfile {
   factory UserProfile.fromFirestore(Map<String, dynamic>? data) {
     if (data == null) return UserProfile();
 
-    final rawHistory = data['goal_history'] as List<dynamic>? ?? [];
-    final parsedHistory = rawHistory
-        .map((e) => GoalHistoryEntry.fromMap(Map<String, dynamic>.from(e)))
-        .toList();
-
     final rawPhases = (data['goal_phases'] ?? data['phases']) as List<dynamic>? ?? [];
     final parsedPhases = rawPhases
         .map((e) => GoalPhase.fromMap(Map<String, dynamic>.from(e)))
@@ -280,7 +249,7 @@ class UserProfile {
       activity: data['activity']?.toString() ?? '1.2',
       goal: data['goal']?.toString() ?? '0',
       proteinMultiplier: data['protein_multiplier']?.toString() ?? '2.0',
-      goalHistory: parsedHistory,
+      estimatedTdee: (data['estimated_tdee'] as num?)?.toDouble(),
       goalPhases: parsedPhases,
     );
   }
@@ -300,7 +269,7 @@ class UserProfile {
       'activity': activity,
       'goal': goal,
       'protein_multiplier': proteinMultiplier,
-      'goal_history': goalHistory.map((e) => e.toMap()).toList(),
+      if (estimatedTdee != null) 'estimated_tdee': estimatedTdee,
       'goal_phases': goalPhases.map((e) => e.toMap()).toList(),
     };
   }
@@ -325,7 +294,7 @@ extension UserProfileGoalExtension on UserProfile {
     }
   }
 
-  GoalHistoryEntry getTargetForDate(String dateStr, {String? earliestLogDate}) {
+  DayTarget getTargetForDate(String dateStr, {String? earliestLogDate}) {
     if (goalPhases.isNotEmpty) {
       for (final phase in goalPhases) {
         final afterStart = dateStr.compareTo(phase.startDate) >= 0;
@@ -343,51 +312,38 @@ extension UserProfileGoalExtension on UserProfile {
               }
             }
             if (matchedAdj != null) {
-              return GoalHistoryEntry(
+              return DayTarget(
                 date: matchedAdj.date,
                 targetCalories: matchedAdj.targetCalories,
                 targetProteinG: matchedAdj.targetProteinG,
                 targetCarbsG: matchedAdj.targetCarbsG,
                 targetFatG: matchedAdj.targetFatG,
                 goal: phase.goal,
+                goalType: phase.goalType,
               );
             }
           }
-          return GoalHistoryEntry(
+          return DayTarget(
             date: phase.startDate,
             targetCalories: phase.initialCalories,
             targetProteinG: phase.initialProteinG,
             targetCarbsG: phase.initialCarbsG,
             targetFatG: phase.initialFatG,
             goal: phase.goal,
+            goalType: phase.goalType,
           );
         }
       }
     }
 
-    if (goalHistory.isEmpty) {
-      return GoalHistoryEntry(
-        date: earliestLogDate ?? dateStr,
-        targetCalories: targetCalories,
-        targetProteinG: targetProteinG,
-        targetCarbsG: targetCarbsG,
-        targetFatG: targetFatG,
-        goal: goal,
-      );
-    }
-
-    final sorted = List<GoalHistoryEntry>.from(goalHistory)
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    GoalHistoryEntry? matched;
-    for (final entry in sorted) {
-      if (entry.date.compareTo(dateStr) <= 0) {
-        matched = entry;
-      } else {
-        break;
-      }
-    }
-
-    return matched ?? sorted.first;
+    return DayTarget(
+      date: earliestLogDate ?? dateStr,
+      targetCalories: targetCalories,
+      targetProteinG: targetProteinG,
+      targetCarbsG: targetCarbsG,
+      targetFatG: targetFatG,
+      goal: goal,
+      goalType: goalType,
+    );
   }
 }

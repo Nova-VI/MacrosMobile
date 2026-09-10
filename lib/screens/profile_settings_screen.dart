@@ -111,15 +111,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final p = _firestoreService.profileNotifier.value;
     DateTime phaseStart = DateTime.now();
 
-    if (p.goalPhases.isNotEmpty) {
-      try {
-        phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalPhases.last.startDate);
-      } catch (_) {}
-    } else if (p.goalHistory.isNotEmpty) {
-      try {
-        phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalHistory.last.date);
-      } catch (_) {}
-    }
+if (p.goalPhases.isNotEmpty) {
+  try {
+    phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalPhases.last.startDate);
+  } catch (_) {}
+}
 
     DateTime parsedDob = DateTime(2001, 1, 1);
     if (p.birthDate.isNotEmpty) {
@@ -356,87 +352,84 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _authService.updateDisplayName(trimmed);
     _showToast('Name updated to "$trimmed"');
   }
+Future<void> _saveProfileAndGoals() async {
+  final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
+  final currentProfile = _firestoreService.profileNotifier.value;
+  final updatedPhases = List<GoalPhase>.from(currentProfile.goalPhases);
 
-  Future<void> _saveProfileAndGoals() async {
-    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
-    final currentProfile = _firestoreService.profileNotifier.value;
-    final updatedPhases = List<GoalPhase>.from(currentProfile.goalPhases);
+  final newCal = double.tryParse(_targetCalController.text) ?? 2000.0;
+  final newPro = double.tryParse(_targetProController.text) ?? 150.0;
+  final newCarb = double.tryParse(_targetCarbController.text) ?? 200.0;
+  final newFat = double.tryParse(_targetFatController.text) ?? 65.0;
 
-    final newCal = double.tryParse(_targetCalController.text) ?? 2000.0;
-    final newPro = double.tryParse(_targetProController.text) ?? 150.0;
-    final newCarb = double.tryParse(_targetCarbController.text) ?? 200.0;
-    final newFat = double.tryParse(_targetFatController.text) ?? 65.0;
+  final manualAdjustment = TargetAdjustment(
+    id: DateTime.now().millisecondsSinceEpoch.toString(),
+    date: todayStr,
+    targetCalories: newCal,
+    targetProteinG: newPro,
+    targetCarbsG: newCarb,
+    targetFatG: newFat,
+    acceptedByUser: false,
+    isManual: true,
+    notes: 'Manual profile settings update',
+  );
 
-    // Record a manual target adjustment
-    final manualAdjustment = TargetAdjustment(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      date: todayStr,
-      targetCalories: newCal,
-      targetProteinG: newPro,
-      targetCarbsG: newCarb,
-      targetFatG: newFat,
-      acceptedByUser: false,
-      isManual: true,
-      notes: 'Manual profile settings update',
-    );
+  if (updatedPhases.isNotEmpty) {
+    final lastPhase = updatedPhases.removeLast();
+    final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
+      ..removeWhere((a) => a.date == todayStr)
+      ..add(manualAdjustment);
 
-    if (updatedPhases.isNotEmpty) {
-      final lastPhase = updatedPhases.removeLast();
-      final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
-        ..removeWhere((a) => a.date == todayStr)
-        ..add(manualAdjustment);
-
-      updatedPhases.add(GoalPhase(
-        id: lastPhase.id,
-        startDate: lastPhase.startDate,
-        endDate: lastPhase.endDate,
-        goal: _weeklyGoal,
-        goalType: lastPhase.goalType,
-        initialCalories: lastPhase.initialCalories,
-        initialProteinG: lastPhase.initialProteinG,
-        initialCarbsG: lastPhase.initialCarbsG,
-        initialFatG: lastPhase.initialFatG,
-        adjustments: adjList,
-      ));
-    } else {
-      updatedPhases.add(GoalPhase(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        startDate: todayStr,
-        goal: _weeklyGoal,
-        goalType: GoalType.maintain,
-        initialCalories: newCal,
-        initialProteinG: newPro,
-        initialCarbsG: newCarb,
-        initialFatG: newFat,
-        adjustments: [manualAdjustment],
-      ));
-    }
-
-    final payload = UserProfile(
-      id: '1',
-      goalMode: _calcMethod,
-      targetCalories: newCal,
-      targetProteinG: newPro,
-      targetCarbsG: newCarb,
-      targetFatG: newFat,
-      birthDate: birthDateStr,
-      gender: _gender,
-      height: double.tryParse(_heightController.text) ?? 175.0,
-      weight: _latestWeight,
-      activity: _activityLevel,
+    updatedPhases.add(GoalPhase(
+      id: lastPhase.id,
+      startDate: lastPhase.startDate,
+      endDate: lastPhase.endDate,
       goal: _weeklyGoal,
-      proteinMultiplier: _proteinMultiplier,
-      goalHistory: currentProfile.goalHistory,
-      goalPhases: updatedPhases,
-    );
-
-    await _firestoreService.saveProfile(payload);
-
-    HapticFeedback.mediumImpact();
-    _showToast('Target goals saved successfully!');
+      goalType: lastPhase.goalType,
+      initialCalories: lastPhase.initialCalories,
+      initialProteinG: lastPhase.initialProteinG,
+      initialCarbsG: lastPhase.initialCarbsG,
+      initialFatG: lastPhase.initialFatG,
+      adjustments: adjList,
+    ));
+  } else {
+    updatedPhases.add(GoalPhase(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      startDate: todayStr,
+      goal: _weeklyGoal,
+      goalType: GoalType.maintain,
+      initialCalories: newCal,
+      initialProteinG: newPro,
+      initialCarbsG: newCarb,
+      initialFatG: newFat,
+      adjustments: [manualAdjustment],
+    ));
   }
 
+  final payload = UserProfile(
+    id: '1',
+    goalMode: _calcMethod,
+    targetCalories: newCal,
+    targetProteinG: newPro,
+    targetCarbsG: newCarb,
+    targetFatG: newFat,
+    birthDate: birthDateStr,
+    gender: _gender,
+    height: double.tryParse(_heightController.text) ?? 175.0,
+    weight: _latestWeight,
+    activity: _activityLevel,
+    goal: _weeklyGoal,
+    proteinMultiplier: _proteinMultiplier,
+    estimatedTdee: currentProfile.estimatedTdee,
+    goalPhases: updatedPhases,
+  );
+
+  await _firestoreService.saveProfile(payload);
+
+  HapticFeedback.mediumImpact();
+  _showToast('Target goals saved successfully!');
+}
   Future<void> _saveApiSettings() async {
     final usdaKey = _usdaKeyController.text.trim();
     final geminiKey = _geminiKeyController.text.trim();

@@ -250,7 +250,6 @@ class AdaptiveCoachService {
   Future<void> acceptProposal(WeeklyCheckInProposal proposal) async {
     final profile = _firestoreService.profileNotifier.value;
     final updatedPhases = List<GoalPhase>.from(profile.goalPhases);
-    final updatedHistory = List<GoalHistoryEntry>.from(profile.goalHistory);
 
     final newAdjustment = TargetAdjustment(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -294,18 +293,6 @@ class AdaptiveCoachService {
       ));
     }
 
-    updatedHistory.removeWhere((e) => e.date == proposal.date);
-    updatedHistory.add(
-      GoalHistoryEntry(
-        date: proposal.date,
-        targetCalories: proposal.proposedCalories.toDouble(),
-        targetProteinG: proposal.proposedProteinG.toDouble(),
-        targetCarbsG: proposal.proposedCarbsG.toDouble(),
-        targetFatG: proposal.proposedFatG.toDouble(),
-        goal: profile.goal,
-      ),
-    );
-
     final updatedProfile = UserProfile(
       id: profile.id,
       goalMode: profile.goalMode,
@@ -320,7 +307,7 @@ class AdaptiveCoachService {
       activity: profile.activity,
       goal: profile.goal,
       proteinMultiplier: profile.proteinMultiplier,
-      goalHistory: updatedHistory,
+      estimatedTdee: proposal.currentTdeeKcal,
       goalPhases: updatedPhases,
     );
 
