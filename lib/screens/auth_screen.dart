@@ -103,10 +103,19 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(
-                    Icons.restaurant_menu_rounded,
-                    size: 56,
-                    color: AppColors.primary,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.restaurant_menu_rounded,
+                        size: 56,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   const Text(
