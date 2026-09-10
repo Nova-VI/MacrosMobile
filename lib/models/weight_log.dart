@@ -1,7 +1,7 @@
 class WeightLog {
   final String date;
   final double weightKg;
-  final double? trendWeightKg;
+  final double? trendWeightKg; // Derived dynamically in memory
 
   WeightLog({
     required this.date,
@@ -21,7 +21,6 @@ class WeightLog {
     return {
       'date': date,
       'weight_kg': weightKg,
-      if (trendWeightKg != null) 'trend_weight_kg': trendWeightKg,
     };
   }
 }

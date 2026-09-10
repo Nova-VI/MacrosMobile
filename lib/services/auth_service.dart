@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'adaptive_coach_service.dart';
 import 'firestore_service.dart';
 
 class AuthService {
@@ -47,21 +48,17 @@ class AuthService {
     }
   }
 
-  /// Optimistic, non-blocking name update that works 100% offline
   Future<void> updateDisplayName(String newName) async {
     final user = _auth.currentUser;
     if (user == null) return;
     final trimmedName = newName.trim();
     if (trimmedName.isEmpty) return;
 
-    // 1. Instant local reactive state update
     userNameNotifier.value = trimmedName;
 
-    // 2. Instant local disk cache persist
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('cached_user_name_${user.uid}', trimmedName);
 
-    // 3. Background non-blocking sync to Firestore and Firebase Auth
     _syncDisplayNameToRemote(user, trimmedName);
   }
 
@@ -91,7 +88,6 @@ class AuthService {
     }, SetOptions(merge: true));
   }
 
-  /// Checks if onboarding is finished. Existing users who already have a profile bypass onboarding.
   Future<bool> checkIsOnboardingCompleted(String uid) async {
     final prefs = await SharedPreferences.getInstance();
     final cached = prefs.getBool('onboarding_completed_$uid');
@@ -101,7 +97,6 @@ class AuthService {
     }
 
     try {
-      // 1. Check if user document has the onboarding flag
       final doc = await _db
           .collection('users')
           .doc(uid)
@@ -116,7 +111,6 @@ class AuthService {
         }
       }
 
-      // 2. Backward compatibility: if existing user already configured target goals, bypass onboarding
       final profileDoc = await _db
           .collection('users')
           .doc(uid)
@@ -178,12 +172,18 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    final user = _auth.currentUser;
+    if (user != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('cached_user_photo_${user.uid}');
+    }
+
     FirestoreService().cancelListeners();
+    AdaptiveCoachService().resetState(); // Clear all coach in-memory variables
+
     userNameNotifier.value = 'User';
     onboardingCompletedNotifier.value = false;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('cached_user_photo');
     await GoogleSignIn.instance.signOut();
     await _auth.signOut();
   }
@@ -205,11 +205,11 @@ class AuthService {
     userNameNotifier.value = name;
 
     String photo = user.photoURL ?? '';
-    final cachedPhoto = prefs.getString('cached_user_photo');
+    final cachedPhoto = prefs.getString('cached_user_photo_${user.uid}');
     if (photo.isEmpty && cachedPhoto != null) {
       photo = cachedPhoto;
     } else if (photo.isNotEmpty) {
-      await prefs.setString('cached_user_photo', photo);
+      await prefs.setString('cached_user_photo_${user.uid}', photo);
     }
 
     final userRef = _db.collection('users').doc(user.uid);
@@ -221,7 +221,7 @@ class AuthService {
       'last_login': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
 
-    // Cache API Keys
+    // Cache API Keys scoped to UID
     try {
       final settingsDoc = await _db
           .collection('users')
@@ -233,13 +233,13 @@ class AuthService {
       if (settingsDoc.exists && settingsDoc.data() != null) {
         final data = settingsDoc.data()!;
         if (data['usda_api_key'] != null) {
-          await prefs.setString('usda_api_key', data['usda_api_key'].toString());
+          await prefs.setString('usda_api_key_${user.uid}', data['usda_api_key'].toString());
         }
         if (data['gemini_api_key'] != null) {
-          await prefs.setString('gemini_api_key', data['gemini_api_key'].toString());
+          await prefs.setString('gemini_api_key_${user.uid}', data['gemini_api_key'].toString());
         }
         if (data['usda_include_branded'] != null) {
-          await prefs.setBool('usda_include_branded', data['usda_include_branded'] == true);
+          await prefs.setBool('usda_include_branded_${user.uid}', data['usda_include_branded'] == true);
         }
       }
     } catch (_) {}

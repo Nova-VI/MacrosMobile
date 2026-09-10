@@ -259,52 +259,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _nextPage();
   }
 
-  Future<void> _submitStep8Usda() async {
+ Future<void> _submitStep8Usda() async {
     final usdaKey = _usdaKeyController.text.trim();
-    if (usdaKey.isNotEmpty) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (usdaKey.isNotEmpty && user != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('usda_api_key', usdaKey);
-      await prefs.setBool('usda_include_branded', _includeBranded);
+      await prefs.setString('usda_api_key_${user.uid}', usdaKey);
+      await prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
 
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('settings')
-            .doc('config')
-            .set({
-          'usda_api_key': usdaKey,
-          'usda_include_branded': _includeBranded,
-        }, SetOptions(merge: true));
-      }
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('config')
+          .set({
+        'usda_api_key': usdaKey,
+        'usda_include_branded': _includeBranded,
+      }, SetOptions(merge: true));
     }
     _nextPage();
   }
 
   Future<void> _submitStep9GeminiAndFinish() async {
     final geminiKey = _geminiKeyController.text.trim();
-    if (geminiKey.isNotEmpty) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (geminiKey.isNotEmpty && user != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('gemini_api_key', geminiKey);
+      await prefs.setString('gemini_api_key_${user.uid}', geminiKey);
 
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('settings')
-            .doc('config')
-            .set({
-          'gemini_api_key': geminiKey,
-        }, SetOptions(merge: true));
-      }
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('config')
+          .set({
+        'gemini_api_key': geminiKey,
+      }, SetOptions(merge: true));
     }
 
     HapticFeedback.mediumImpact();
     await _authService.setOnboardingCompleted(true);
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -28,32 +28,35 @@ class UsdaService {
   };
 
   Future<String> _getApiKey() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return '';
+
     final prefs = await SharedPreferences.getInstance();
-    String key = prefs.getString('usda_api_key') ?? '';
+    String key = prefs.getString('usda_api_key_${user.uid}') ?? '';
 
     if (key.isEmpty) {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        try {
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('settings')
-              .doc('config')
-              .get();
-          if (doc.exists && doc.data()?['usda_api_key'] != null) {
-            key = doc.data()!['usda_api_key'].toString();
-            await prefs.setString('usda_api_key', key);
-          }
-        } catch (_) {}
-      }
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('settings')
+            .doc('config')
+            .get();
+        if (doc.exists && doc.data()?['usda_api_key'] != null) {
+          key = doc.data()!['usda_api_key'].toString();
+          await prefs.setString('usda_api_key_${user.uid}', key);
+        }
+      } catch (_) {}
     }
     return key;
   }
 
   Future<bool> _getIncludeBranded() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('usda_include_branded') ?? false;
+    return prefs.getBool('usda_include_branded_${user.uid}') ?? false;
   }
 
   Future<List<Map<String, dynamic>>> searchFoods(String query) async {

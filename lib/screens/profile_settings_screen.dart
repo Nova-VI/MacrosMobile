@@ -100,7 +100,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     });
   }
 
-  Future<void> _loadInitialData() async {
+Future<void> _loadInitialData() async {
     final user = _authService.currentUser;
     if (user != null) {
       setState(() {
@@ -111,11 +111,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final p = _firestoreService.profileNotifier.value;
     DateTime phaseStart = DateTime.now();
 
-if (p.goalPhases.isNotEmpty) {
-  try {
-    phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalPhases.last.startDate);
-  } catch (_) {}
-}
+    if (p.goalPhases.isNotEmpty) {
+      try {
+        phaseStart = DateFormat('yyyy-MM-dd').parse(p.goalPhases.last.startDate);
+      } catch (_) {}
+    }
 
     DateTime parsedDob = DateTime(2001, 1, 1);
     if (p.birthDate.isNotEmpty) {
@@ -124,7 +124,6 @@ if (p.goalPhases.isNotEmpty) {
       } catch (_) {}
     }
 
-    // Read active targets directly from the latest phase adjustment if available
     final activePhase = p.goalPhases.isNotEmpty ? p.goalPhases.last : null;
     final latestAdj = (activePhase != null && activePhase.adjustments.isNotEmpty)
         ? activePhase.adjustments.last
@@ -151,12 +150,14 @@ if (p.goalPhases.isNotEmpty) {
       _targetFatController.text = activeFat.round().toString();
     });
 
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _usdaKeyController.text = prefs.getString('usda_api_key') ?? '';
-      _geminiKeyController.text = prefs.getString('gemini_api_key') ?? '';
-      _includeBranded = prefs.getBool('usda_include_branded') ?? false;
-    });
+    if (user != null) {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _usdaKeyController.text = prefs.getString('usda_api_key_${user.uid}') ?? '';
+        _geminiKeyController.text = prefs.getString('gemini_api_key_${user.uid}') ?? '';
+        _includeBranded = prefs.getBool('usda_include_branded_${user.uid}') ?? false;
+      });
+    }
   }
 
   void _performLiveCalculations() {
@@ -430,17 +431,17 @@ Future<void> _saveProfileAndGoals() async {
   HapticFeedback.mediumImpact();
   _showToast('Target goals saved successfully!');
 }
-  Future<void> _saveApiSettings() async {
+   Future<void> _saveApiSettings() async {
     final usdaKey = _usdaKeyController.text.trim();
     final geminiKey = _geminiKeyController.text.trim();
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('usda_api_key', usdaKey);
-    await prefs.setString('gemini_api_key', geminiKey);
-    await prefs.setBool('usda_include_branded', _includeBranded);
-
     final user = FirebaseAuth.instance.currentUser;
+
     if (user != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('usda_api_key_${user.uid}', usdaKey);
+      await prefs.setString('gemini_api_key_${user.uid}', geminiKey);
+      await prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
+
       await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
         'usda_api_key': usdaKey,
         'gemini_api_key': geminiKey,

@@ -12,25 +12,25 @@ class GeminiService {
   ];
 
   static Future<String> _getApiKey() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return '';
+
     final prefs = await SharedPreferences.getInstance();
-    String key = prefs.getString('gemini_api_key') ?? '';
+    String key = prefs.getString('gemini_api_key_${user.uid}') ?? '';
 
     if (key.isEmpty) {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        try {
-          final doc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('settings')
-              .doc('config')
-              .get();
-          if (doc.exists && doc.data()?['gemini_api_key'] != null) {
-            key = doc.data()!['gemini_api_key'].toString();
-            await prefs.setString('gemini_api_key', key);
-          }
-        } catch (_) {}
-      }
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('settings')
+            .doc('config')
+            .get();
+        if (doc.exists && doc.data()?['gemini_api_key'] != null) {
+          key = doc.data()!['gemini_api_key'].toString();
+          await prefs.setString('gemini_api_key_${user.uid}', key);
+        }
+      } catch (_) {}
     }
     return key;
   }
@@ -83,9 +83,7 @@ class GeminiService {
             }
           }
         }
-      } catch (_) {
-        // Drop smoothly on timeout or error
-      }
+      } catch (_) {}
     }
 
     return '🍽️';

@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/daily_log.dart';
-import '../models/weight_log.dart';
 import '../models/user_profile.dart';
 import 'adaptive_coach_engine.dart';
 import 'firestore_service.dart';
@@ -52,12 +50,22 @@ class AdaptiveCoachService {
   final ValueNotifier<WeeklyCheckInProposal?> dismissedProposalNotifier = ValueNotifier(null);
   final ValueNotifier<AdaptiveCoachState?> liveObserverStateNotifier = ValueNotifier(null);
 
+  /// Clears in-memory singletons on sign out so no data leaks between accounts.
+  void resetState() {
+    checkInProposalNotifier.value = null;
+    dismissedProposalNotifier.value = null;
+    liveObserverStateNotifier.value = null;
+  }
+
   Future<void> recomputeAndEvaluate() async {
     final profile = _firestoreService.profileNotifier.value;
     final allLogs = _firestoreService.logsNotifier.value;
     final allWeights = _firestoreService.weightLogsNotifier.value;
 
-    if (allWeights.isEmpty && allLogs.isEmpty) return;
+    // Strict guard: Never run on uninitialized default profiles or empty histories
+    if (profile.goalPhases.isEmpty || (allWeights.isEmpty && allLogs.isEmpty)) {
+      return;
+    }
 
     final weightDates = allWeights.map((w) => w.date).where((d) => d.isNotEmpty);
     final logDates = allLogs.map((l) => l.date).where((d) => d.isNotEmpty);
@@ -160,6 +168,7 @@ class AdaptiveCoachService {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayStr = DateFormat('yyyy-MM-dd').format(today);
+    final uid = _firestoreService.currentUid;
 
     final activePhase = profile.goalPhases.isNotEmpty ? profile.goalPhases.last : null;
     DateTime lastCheckInDate = today.subtract(const Duration(days: 8));
@@ -236,7 +245,7 @@ class AdaptiveCoachService {
     );
 
     final prefs = await SharedPreferences.getInstance();
-    final dismissedDate = prefs.getString('dismissed_checkin_date');
+    final dismissedDate = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
 
     if (dismissedDate == todayStr) {
       checkInProposalNotifier.value = null;
@@ -250,6 +259,7 @@ class AdaptiveCoachService {
   Future<void> acceptProposal(WeeklyCheckInProposal proposal) async {
     final profile = _firestoreService.profileNotifier.value;
     final updatedPhases = List<GoalPhase>.from(profile.goalPhases);
+    final uid = _firestoreService.currentUid;
 
     final newAdjustment = TargetAdjustment(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -314,20 +324,24 @@ class AdaptiveCoachService {
     checkInProposalNotifier.value = null;
     dismissedProposalNotifier.value = null;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('dismissed_checkin_date');
+    if (uid != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('dismissed_checkin_date_$uid');
+    }
 
     await _firestoreService.saveProfile(updatedProfile);
   }
 
   Future<void> dismissProposal() async {
     final proposal = checkInProposalNotifier.value ?? dismissedProposalNotifier.value;
-    if (proposal != null) {
+    final uid = _firestoreService.currentUid;
+
+    if (proposal != null && uid != null) {
       dismissedProposalNotifier.value = proposal;
       checkInProposalNotifier.value = null;
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('dismissed_checkin_date', proposal.date);
+      await prefs.setString('dismissed_checkin_date_$uid', proposal.date);
     }
   }
 }
