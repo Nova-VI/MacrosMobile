@@ -166,7 +166,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                 child: Row(
                                   children: [
-                                     Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
+                                    Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
                                     const SizedBox(width: 8),
                                     Text(
                                       _getDateHeaderTitle(currentDate),
@@ -195,7 +195,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: PageView.builder(
                     controller: _pageController,
-                    physics: const BouncingScrollPhysics(),
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    findChildIndexCallback: (Key key) {
+                      if (key is ValueKey<String>) {
+                        try {
+                          final parsedDate = DateFormat('yyyy-MM-dd').parse(key.value);
+                          return _getPageForDate(parsedDate);
+                        } catch (_) {
+                          return null;
+                        }
+                      }
+                      return null;
+                    },
                     onPageChanged: (pageIndex) {
                       _selectedDateNotifier.value = _getDateForPage(pageIndex);
                     },
@@ -278,7 +291,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     final newLog = DailyLog(
       id: '',
       date: todayStr,
-      loggedAt: now.toIso8601String(), // Explicitly set to current time of day
+      loggedAt: now.toIso8601String(),
       foodId: log.foodId,
       foodName: log.foodName,
       servingName: log.servingName,
@@ -290,7 +303,6 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
       micros: log.micros,
     );
 
-    // Instant optimistic write to in-memory list and non-blocking background Firestore write
     FirestoreService().addLog(newLog);
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -304,7 +316,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side:  BorderSide(color: AppColors.primary),
+          side: BorderSide(color: AppColors.primary),
         ),
         duration: const Duration(seconds: 2),
       ),
@@ -339,7 +351,9 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       children: [
         _buildOverviewCard(
           totalCals: totalCals,
@@ -464,18 +478,14 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                           'Calories Target',
                           style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600),
                         ),
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: Text(
-                            key: ValueKey(showRemaining),
-                            showRemaining
-                                ? (calDiff >= 0 ? '$calDiff kcal left' : '+${calDiff.abs()} kcal over')
-                                : '${totalCals.round()} / ${targetCals.round()} kcal',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800,
-                              color: isCalOver ? AppColors.danger : AppColors.textMain,
-                            ),
+                        Text(
+                          showRemaining
+                              ? (calDiff >= 0 ? '$calDiff kcal left' : '+${calDiff.abs()} kcal over')
+                              : '${totalCals.round()} / ${targetCals.round()} kcal',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: isCalOver ? AppColors.danger : AppColors.textMain,
                           ),
                         ),
                       ],
@@ -483,24 +493,17 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                     const SizedBox(height: 6),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0.0, end: calProgress),
-                        duration: const Duration(milliseconds: 400),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, _) {
-                          return LinearProgressIndicator(
-                            value: value,
-                            minHeight: 6,
-                            backgroundColor: AppColors.background,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              isCalOver
-                                  ? AppColors.danger
-                                  : value >= 0.9
-                                      ? AppColors.warning
-                                      : AppColors.primary,
-                            ),
-                          );
-                        },
+                      child: LinearProgressIndicator(
+                        value: calProgress,
+                        minHeight: 6,
+                        backgroundColor: AppColors.background,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isCalOver
+                              ? AppColors.danger
+                              : calProgress >= 0.9
+                                  ? AppColors.warning
+                                  : AppColors.primary,
+                        ),
                       ),
                     ),
                   ],
@@ -551,16 +554,12 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                   ),
                 ],
               ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: Text(
-                  key: ValueKey('$displayVal-$showRemaining'),
-                  displayVal,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: (showRemaining && isOver) ? AppColors.warning : AppColors.textMuted,
-                  ),
+              Text(
+                displayVal,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: (showRemaining && isOver) ? AppColors.warning : AppColors.textMuted,
                 ),
               ),
             ],
@@ -568,18 +567,11 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           const SizedBox(height: 4),
           ClipRRect(
             borderRadius: BorderRadius.circular(2),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0.0, end: progress),
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, _) {
-                return LinearProgressIndicator(
-                  value: value,
-                  minHeight: 3.5,
-                  backgroundColor: AppColors.surfaceHover,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                );
-              },
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 3.5,
+              backgroundColor: AppColors.surfaceHover,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
         ],
@@ -723,7 +715,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                     ),
                     child: Text(
                       '${phaseCals.round()} kcal',
-                      style:  TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                         color: AppColors.primary,
@@ -1020,7 +1012,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
               color: AppColors.primary.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child:  Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
+            child: Icon(Icons.fastfood_rounded, size: 24, color: AppColors.primary),
           ),
           const SizedBox(height: 10),
           const Text(
