@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import '../models/daily_log.dart';
 import '../models/user_profile.dart';
 import '../services/firestore_service.dart';
+import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/macro_donut_chart.dart';
+import '../widgets/weekly_checkin_banner.dart';
 
 enum DayPhase {
   morning('Morning', 5, 11),
@@ -44,10 +46,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _today = DateTime(now.year, now.month, now.day);
     _selectedDateNotifier = ValueNotifier(_today);
     _pageController = PageController(initialPage: _initialPage);
+
+    // Run adaptive coach evaluation cleanly on post-frame initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AdaptiveCoachService().recomputeAndEvaluate();
+    });
+
+    // Listen to log and weight updates outside of build
+    FirestoreService().logsNotifier.addListener(_onDataChanged);
+    FirestoreService().weightLogsNotifier.addListener(_onDataChanged);
+  }
+
+  void _onDataChanged() {
+    AdaptiveCoachService().recomputeAndEvaluate();
   }
 
   @override
   void dispose() {
+    FirestoreService().logsNotifier.removeListener(_onDataChanged);
+    FirestoreService().weightLogsNotifier.removeListener(_onDataChanged);
     _pageController.dispose();
     _selectedDateNotifier.dispose();
     _showRemainingNotifier.dispose();
@@ -90,7 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context, child) {
         return Theme(
           data: AppTheme.darkTheme.copyWith(
-            colorScheme:  ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: AppColors.primary,
               surface: AppColors.surface,
               onSurface: AppColors.textMain,
@@ -123,6 +140,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (context, profile, _) {
             return Column(
               children: [
+                // 1. Weekly Check-In Interactive Banner (Only appears when check-in is due)
+                const WeeklyCheckInBanner(),
+
+                // 2. Date Navigation Bar
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: ValueListenableBuilder<DateTime>(
@@ -301,20 +322,24 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     );
   }
 
-  Widget _buildOverviewCard({
-    required double totalCals,
-    required double totalPro,
-    required double totalCarbs,
-    required double totalFat,
-  }) {
-    final targetCals = widget.profile.targetCalories > 0 ? widget.profile.targetCalories : 2000.0;
-    final targetPro = widget.profile.targetProteinG > 0 ? widget.profile.targetProteinG : 150.0;
-    final targetCarbs = widget.profile.targetCarbsG > 0 ? widget.profile.targetCarbsG : 200.0;
-    final targetFat = widget.profile.targetFatG > 0 ? widget.profile.targetFatG : 65.0;
+Widget _buildOverviewCard({
+  required double totalCals,
+  required double totalPro,
+  required double totalCarbs,
+  required double totalFat,
+}) {
+  // Pulls the historical target active on this page's specific date
+  final dateKey = DateFormat('yyyy-MM-dd').format(widget.pageDate);
+  final dayTarget = widget.profile.getTargetForDate(dateKey);
 
-    final calProgress = (totalCals / targetCals).clamp(0.0, 1.0);
-    final isCalOver = totalCals > targetCals;
-    final calDiff = (targetCals - totalCals).round();
+  final targetCals = dayTarget.targetCalories > 0 ? dayTarget.targetCalories : 2000.0;
+  final targetPro = dayTarget.targetProteinG > 0 ? dayTarget.targetProteinG : 150.0;
+  final targetCarbs = dayTarget.targetCarbsG > 0 ? dayTarget.targetCarbsG : 200.0;
+  final targetFat = dayTarget.targetFatG > 0 ? dayTarget.targetFatG : 65.0;
+
+  final calProgress = (totalCals / targetCals).clamp(0.0, 1.0);
+  final isCalOver = totalCals > targetCals;
+  final calDiff = (targetCals - totalCals).round();
 
     return ValueListenableBuilder<bool>(
       valueListenable: widget.showRemainingNotifier,
@@ -633,12 +658,10 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
       direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          // Swipe Right -> Trigger Edit Mode with Target Date
           HapticFeedback.mediumImpact();
           widget.onNavigateToLogWithDate(widget.pageDate, editLog: log);
           return false;
         } else {
-          // Swipe Left -> Trigger Delete
           return await _showDeleteConfirmation(log);
         }
       },
@@ -761,7 +784,6 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                 ),
                 const SizedBox(height: 8),
 
-                // Compact Metric Capsules
                 Row(
                   children: [
                     _buildCompactCapsule('Calories', '${log.macros.calories.round()}', color: AppColors.primary),
@@ -774,7 +796,6 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
                   ],
                 ),
 
-                // Micronutrient Drawer
                 if (isExpanded) ...[
                   const SizedBox(height: 10),
                   Container(

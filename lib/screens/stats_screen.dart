@@ -6,7 +6,9 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/daily_log.dart';
 import '../models/user_profile.dart';
 import '../services/firestore_service.dart';
+import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/weekly_checkin_sheet.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -18,8 +20,8 @@ class StatsScreen extends StatefulWidget {
 class _StatsScreenState extends State<StatsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
-  String _currentRange = '30'; // Default 30 days
-  String _currentMetric = 'calories'; // 'calories', 'protein', 'carbs', 'fat'
+  String _currentRange = '30';
+  String _currentMetric = 'calories';
   bool _isMicrosExpanded = true;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
@@ -77,6 +79,10 @@ class _StatsScreenState extends State<StatsScreen> {
                   children: [
                     _buildRangeFilterRow(),
                     const SizedBox(height: 14),
+
+                    // On-Demand Review Card if a check-in is pending or was dismissed
+                    _buildDismissedCheckInCard(),
+
                     _buildAdherenceBanner(statsData, profile),
                     const SizedBox(height: 14),
                     _buildMetaCard(statsData),
@@ -95,6 +101,70 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildDismissedCheckInCard() {
+    return ValueListenableBuilder<WeeklyCheckInProposal?>(
+      valueListenable: AdaptiveCoachService().dismissedProposalNotifier,
+      builder: (context, proposal, _) {
+        if (proposal == null) return const SizedBox.shrink();
+
+        final calDelta = proposal.proposedCalories - proposal.currentCalories;
+        final deltaStr = calDelta > 0 ? '+$calDelta' : '$calDelta';
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Adaptive Check-In Available',
+                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: AppColors.textMain),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Proposed: ${proposal.proposedCalories} kcal ($deltaStr) • TDEE: ${proposal.currentTdeeKcal.round()} kcal',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  minimumSize: const Size(54, 32),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  WeeklyCheckInSheet.show(context, proposal);
+                },
+                child: const Text('Review', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -255,7 +325,6 @@ class _StatsScreenState extends State<StatsScreen> {
     }
 
     if (evaluatedDays == 0) return 0;
-
     final dailyConsistencyScore = cumulativeDailyScore / evaluatedDays;
     return (dailyConsistencyScore * 100).round().clamp(0, 100);
   }
@@ -274,21 +343,11 @@ class _StatsScreenState extends State<StatsScreen> {
 
     switch (goalType) {
       case GoalType.cut:
-        if (diff <= 0) {
-          effectiveError = diff.abs() * 0.35;
-        } else {
-          effectiveError = diff * 1.25;
-        }
+        effectiveError = diff <= 0 ? diff.abs() * 0.35 : diff * 1.25;
         break;
-
       case GoalType.bulk:
-        if (diff >= 0) {
-          effectiveError = diff * 0.7;
-        } else {
-          effectiveError = diff.abs() * 1.25;
-        }
+        effectiveError = diff >= 0 ? diff * 0.7 : diff.abs() * 1.25;
         break;
-
       case GoalType.maintain:
         effectiveError = diff.abs();
         break;
@@ -586,7 +645,6 @@ class _StatsScreenState extends State<StatsScreen> {
 
     final referencePeak = math.max(maxBarValue, maxTargetValue);
 
-    // Responsive clean intervalStep scaled directly to each metric
     double intervalStep;
     if (_currentMetric == 'calories') {
       intervalStep = referencePeak > 3000 ? 1000 : 500;
@@ -594,7 +652,7 @@ class _StatsScreenState extends State<StatsScreen> {
       intervalStep = referencePeak > 180 ? 50 : 30;
     } else if (_currentMetric == 'carbs') {
       intervalStep = referencePeak > 300 ? 75 : 50;
-    } else { // fat
+    } else {
       intervalStep = referencePeak > 100 ? 25 : 15;
     }
 
@@ -739,8 +797,6 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
               ),
             ),
-
-            // Stepped dynamic target line properly scaled per metric
             Positioned(
               left: leftPadding,
               top: 0,

@@ -2,20 +2,21 @@ import 'package:intl/intl.dart';
 
 enum GoalType { cut, maintain, bulk }
 
-/// Represents a weekly micro-adjustment / check-in recommendation
-/// (MacroFactor-style automated weekly adjustment).
-class WeeklyGoalAdjustment {
+/// Represents an individual macro & calorie target adjustment
+/// (applied either via adaptive check-in or manual user override).
+class TargetAdjustment {
   final String id;
-  final String date; // YYYY-MM-DD of the weekly check-in
+  final String date; // YYYY-MM-DD
   final double targetCalories;
   final double targetProteinG;
   final double targetCarbsG;
   final double targetFatG;
   final double? estimatedExpenditure; // Estimated TDEE in kcal
   final bool acceptedByUser;
+  final bool isManual;
   final String? notes;
 
-  WeeklyGoalAdjustment({
+  TargetAdjustment({
     required this.id,
     required this.date,
     required this.targetCalories,
@@ -24,11 +25,12 @@ class WeeklyGoalAdjustment {
     required this.targetFatG,
     this.estimatedExpenditure,
     this.acceptedByUser = true,
+    this.isManual = false,
     this.notes,
   });
 
-  factory WeeklyGoalAdjustment.fromMap(Map<String, dynamic> data) {
-    return WeeklyGoalAdjustment(
+  factory TargetAdjustment.fromMap(Map<String, dynamic> data) {
+    return TargetAdjustment(
       id: data['id']?.toString() ?? '',
       date: data['date'] ?? '',
       targetCalories: (data['target_calories'] as num?)?.toDouble() ?? 2000.0,
@@ -37,6 +39,7 @@ class WeeklyGoalAdjustment {
       targetFatG: (data['target_fat_g'] as num?)?.toDouble() ?? 65.0,
       estimatedExpenditure: (data['estimated_expenditure'] as num?)?.toDouble(),
       acceptedByUser: data['accepted_by_user'] == true,
+      isManual: data['is_manual'] == true,
       notes: data['notes']?.toString(),
     );
   }
@@ -51,6 +54,7 @@ class WeeklyGoalAdjustment {
       'target_fat_g': targetFatG,
       'estimated_expenditure': estimatedExpenditure,
       'accepted_by_user': acceptedByUser,
+      'is_manual': isManual,
       if (notes != null) 'notes': notes,
     };
   }
@@ -61,13 +65,13 @@ class GoalPhase {
   final String id;
   final String startDate; // YYYY-MM-DD
   final String? endDate;   // YYYY-MM-DD, null if active
-  final String goal;       // Weekly surplus/deficit offset (e.g. '-500', '0', '+250')
+  final String goal;       // Surplus/deficit offset (e.g. '-500', '0', '+250')
   final GoalType goalType;
   final double initialCalories;
   final double initialProteinG;
   final double initialCarbsG;
   final double initialFatG;
-  final List<WeeklyGoalAdjustment> weeklyAdjustments;
+  final List<TargetAdjustment> adjustments;
 
   GoalPhase({
     required this.id,
@@ -79,11 +83,18 @@ class GoalPhase {
     required this.initialProteinG,
     required this.initialCarbsG,
     required this.initialFatG,
-    this.weeklyAdjustments = const [],
+    this.adjustments = const [],
   });
 
+  TargetAdjustment? get latestAdjustment => adjustments.isNotEmpty ? adjustments.last : null;
+
+  double get currentCalories => latestAdjustment?.targetCalories ?? initialCalories;
+  double get currentProteinG => latestAdjustment?.targetProteinG ?? initialProteinG;
+  double get currentCarbsG => latestAdjustment?.targetCarbsG ?? initialCarbsG;
+  double get currentFatG => latestAdjustment?.targetFatG ?? initialFatG;
+
   factory GoalPhase.fromMap(Map<String, dynamic> data) {
-    final rawAdjustments = data['weekly_adjustments'] as List<dynamic>? ?? [];
+    final rawAdjustments = (data['adjustments'] ?? data['weekly_adjustments']) as List<dynamic>? ?? [];
     final goalVal = data['goal']?.toString() ?? '0';
 
     GoalType parsedType = GoalType.maintain;
@@ -104,8 +115,8 @@ class GoalPhase {
       initialProteinG: (data['initial_protein_g'] ?? data['target_protein_g'] as num?)?.toDouble() ?? 150.0,
       initialCarbsG: (data['initial_carbs_g'] ?? data['target_carbs_g'] as num?)?.toDouble() ?? 200.0,
       initialFatG: (data['initial_fat_g'] ?? data['target_fat_g'] as num?)?.toDouble() ?? 65.0,
-      weeklyAdjustments: rawAdjustments
-          .map((e) => WeeklyGoalAdjustment.fromMap(Map<String, dynamic>.from(e)))
+      adjustments: rawAdjustments
+          .map((e) => TargetAdjustment.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
     );
   }
@@ -121,7 +132,7 @@ class GoalPhase {
       'initial_protein_g': initialProteinG,
       'initial_carbs_g': initialCarbsG,
       'initial_fat_g': initialFatG,
-      'weekly_adjustments': weeklyAdjustments.map((e) => e.toMap()).toList(),
+      'adjustments': adjustments.map((e) => e.toMap()).toList(),
     };
   }
 }
@@ -208,7 +219,6 @@ class UserProfile {
     this.goalPhases = const [],
   });
 
-  /// Automatically computes exact age based on [birthDate]
   int get age {
     if (birthDate.isEmpty) return 25;
     try {
@@ -224,6 +234,18 @@ class UserProfile {
     }
   }
 
+  TargetAdjustment? get latestAdjustment {
+    if (goalPhases.isNotEmpty && goalPhases.last.adjustments.isNotEmpty) {
+      return goalPhases.last.adjustments.last;
+    }
+    return null;
+  }
+
+  double get activeTargetCalories => latestAdjustment?.targetCalories ?? targetCalories;
+  double get activeTargetProteinG => latestAdjustment?.targetProteinG ?? targetProteinG;
+  double get activeTargetCarbsG => latestAdjustment?.targetCarbsG ?? targetCarbsG;
+  double get activeTargetFatG => latestAdjustment?.targetFatG ?? targetFatG;
+
   factory UserProfile.fromFirestore(Map<String, dynamic>? data) {
     if (data == null) return UserProfile();
 
@@ -232,12 +254,11 @@ class UserProfile {
         .map((e) => GoalHistoryEntry.fromMap(Map<String, dynamic>.from(e)))
         .toList();
 
-    final rawPhases = data['goal_phases'] as List<dynamic>? ?? [];
+    final rawPhases = (data['goal_phases'] ?? data['phases']) as List<dynamic>? ?? [];
     final parsedPhases = rawPhases
         .map((e) => GoalPhase.fromMap(Map<String, dynamic>.from(e)))
         .toList();
 
-    // Backward compatibility: derive birthDate if older schema stored integer age
     String resolvedBirthDate = data['birth_date']?.toString() ?? '';
     if (resolvedBirthDate.isEmpty) {
       final legacyAge = (data['age'] as num?)?.toInt() ?? 25;
@@ -304,19 +325,16 @@ extension UserProfileGoalExtension on UserProfile {
     }
   }
 
-  /// Strictly returns whatever goal was configured and active on [dateStr]
   GoalHistoryEntry getTargetForDate(String dateStr, {String? earliestLogDate}) {
-    // 1. First check if any subphase / weekly check-in within major phases covers this date
     if (goalPhases.isNotEmpty) {
       for (final phase in goalPhases) {
         final afterStart = dateStr.compareTo(phase.startDate) >= 0;
         final beforeEnd = phase.endDate == null || dateStr.compareTo(phase.endDate!) <= 0;
         if (afterStart && beforeEnd) {
-          // If there are weekly adjustments, pick the latest adjustment prior to or on dateStr
-          if (phase.weeklyAdjustments.isNotEmpty) {
-            final sortedAdj = List<WeeklyGoalAdjustment>.from(phase.weeklyAdjustments)
+          if (phase.adjustments.isNotEmpty) {
+            final sortedAdj = List<TargetAdjustment>.from(phase.adjustments)
               ..sort((a, b) => a.date.compareTo(b.date));
-            WeeklyGoalAdjustment? matchedAdj;
+            TargetAdjustment? matchedAdj;
             for (final adj in sortedAdj) {
               if (adj.date.compareTo(dateStr) <= 0) {
                 matchedAdj = adj;
@@ -347,7 +365,6 @@ extension UserProfileGoalExtension on UserProfile {
       }
     }
 
-    // 2. Fallback to flat goal history
     if (goalHistory.isEmpty) {
       return GoalHistoryEntry(
         date: earliestLogDate ?? dateStr,
@@ -372,19 +389,5 @@ extension UserProfileGoalExtension on UserProfile {
     }
 
     return matched ?? sorted.first;
-  }
-
-  // =========================================================================
-  // PLACEHOLDER: ADAPTIVE WEEKLY ALGORITHM
-  // =========================================================================
-  /// Future logic will calculate estimated expenditure by comparing weekly 
-  /// scale weight trend against average daily calorie intake, then produce 
-  /// a new [WeeklyGoalAdjustment] for user approval.
-  WeeklyGoalAdjustment? calculateWeeklyAdaptiveAdjustment({
-    required List<double> recentWeightsKg,
-    required double averageCaloriesConsumed,
-  }) {
-    // TODO: Implement adaptive expenditure calculation & weekly macro delta
-    return null;
   }
 }

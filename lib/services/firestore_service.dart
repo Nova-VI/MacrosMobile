@@ -212,58 +212,60 @@ class FirestoreService {
 
   Future<String> addLog(DailyLog log) async {
     final ref = _db.collection('users').doc(_uid).collection('logs').doc();
-    ref.set(log.toMap());
+    await ref.set(log.toMap());
     return ref.id;
   }
 
   Future<void> updateLog(String id, Map<String, dynamic> changes) async {
-    _db.collection('users').doc(_uid).collection('logs').doc(id).update(changes);
+    await _db.collection('users').doc(_uid).collection('logs').doc(id).update(changes);
   }
 
   Future<void> deleteLog(String id) async {
-    _db.collection('users').doc(_uid).collection('logs').doc(id).delete();
+    await _db.collection('users').doc(_uid).collection('logs').doc(id).delete();
   }
 
   Future<String> addFood(FoodItem food) async {
     final ref = _db.collection('users').doc(_uid).collection('foods').doc();
-    ref.set(food.toMap());
+    await ref.set(food.toMap());
     return ref.id;
   }
 
   Future<void> updateFood(String id, Map<String, dynamic> changes) async {
-    _db.collection('users').doc(_uid).collection('foods').doc(id).update(changes);
+    await _db.collection('users').doc(_uid).collection('foods').doc(id).update(changes);
   }
 
   Future<void> deleteFood(String id) async {
-    _db.collection('users').doc(_uid).collection('foods').doc(id).delete();
+    await _db.collection('users').doc(_uid).collection('foods').doc(id).delete();
   }
 
   Future<void> setWeightLog(WeightLog log) async {
-    _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(
+    await _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(
       log.toMap(),
       SetOptions(merge: true),
     );
   }
 
   Future<void> deleteWeightLog(String date) async {
-    _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
+    await _db.collection('users').doc(_uid).collection('weight_logs').doc(date).delete();
   }
 
-  /// Saves the user profile. Only records a new Major Phase / Goal History snapshot
-  /// if the goal mode or weekly goal (cut/bulk/maintain) actually changed.
+  /// Saves the user profile. Writes incoming goalPhases & goalHistory safely.
   Future<void> saveProfile(UserProfile profile) async {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final currentProfile = profileNotifier.value;
 
-    final currentHistory = List<GoalHistoryEntry>.from(currentProfile.goalHistory);
-    final currentPhases = List<GoalPhase>.from(currentProfile.goalPhases);
+    final currentHistory = List<GoalHistoryEntry>.from(
+      profile.goalHistory.isNotEmpty ? profile.goalHistory : currentProfile.goalHistory,
+    );
+    final currentPhases = List<GoalPhase>.from(
+      profile.goalPhases.isNotEmpty ? profile.goalPhases : currentProfile.goalPhases,
+    );
 
     final bool isGoalChanged = currentProfile.goal != profile.goal ||
         currentProfile.goalMode != profile.goalMode ||
         currentHistory.isEmpty;
 
     if (isGoalChanged) {
-      // 1. Update Flat Goal History
       currentHistory.removeWhere((e) => e.date == todayStr);
       currentHistory.add(
         GoalHistoryEntry(
@@ -276,7 +278,6 @@ class FirestoreService {
         ),
       );
 
-      // 2. Close previous active major phase if any, and start a new major phase
       if (currentPhases.isNotEmpty && currentPhases.last.endDate == null) {
         final lastPhase = currentPhases.removeLast();
         currentPhases.add(GoalPhase(
@@ -289,7 +290,7 @@ class FirestoreService {
           initialProteinG: lastPhase.initialProteinG,
           initialCarbsG: lastPhase.initialCarbsG,
           initialFatG: lastPhase.initialFatG,
-          weeklyAdjustments: lastPhase.weeklyAdjustments,
+          adjustments: lastPhase.adjustments,
         ));
       }
 
@@ -322,6 +323,8 @@ class FirestoreService {
       goalHistory: currentHistory,
       goalPhases: currentPhases,
     );
+
+    profileNotifier.value = updatedProfile;
 
     await _db.collection('users').doc(_uid).collection('profile').doc('1').set(
       updatedProfile.toMap(),

@@ -10,8 +10,10 @@ import 'package:intl/intl.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/api_key_guide_sheet.dart';
+import '../widgets/weekly_checkin_sheet.dart';
 import 'weight_tracker_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
@@ -28,6 +30,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final AuthService _authService = AuthService();
 
+  // Calculator Form Controllers
   DateTime _birthDate = DateTime(2001, 1, 1);
   final _heightController = TextEditingController(text: '175');
   final _targetCalController = TextEditingController();
@@ -35,6 +38,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final _targetCarbController = TextEditingController();
   final _targetFatController = TextEditingController();
 
+  // API Key Controllers
   final _usdaKeyController = TextEditingController();
   final _geminiKeyController = TextEditingController();
 
@@ -124,6 +128,17 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       } catch (_) {}
     }
 
+    // Read active targets directly from the latest phase adjustment if available
+    final activePhase = p.goalPhases.isNotEmpty ? p.goalPhases.last : null;
+    final latestAdj = (activePhase != null && activePhase.adjustments.isNotEmpty)
+        ? activePhase.adjustments.last
+        : null;
+
+    final activeCal = latestAdj?.targetCalories ?? p.targetCalories;
+    final activePro = latestAdj?.targetProteinG ?? p.targetProteinG;
+    final activeCarb = latestAdj?.targetCarbsG ?? p.targetCarbsG;
+    final activeFat = latestAdj?.targetFatG ?? p.targetFatG;
+
     setState(() {
       _calcMethod = p.goalMode;
       _birthDate = parsedDob;
@@ -134,10 +149,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       _proteinMultiplier = p.proteinMultiplier;
       _goalPhaseStartDate = phaseStart;
 
-      _targetCalController.text = p.targetCalories.round().toString();
-      _targetProController.text = p.targetProteinG.round().toString();
-      _targetCarbController.text = p.targetCarbsG.round().toString();
-      _targetFatController.text = p.targetFatG.round().toString();
+      _targetCalController.text = activeCal.round().toString();
+      _targetProController.text = activePro.round().toString();
+      _targetCarbController.text = activeCarb.round().toString();
+      _targetFatController.text = activeFat.round().toString();
     });
 
     final prefs = await SharedPreferences.getInstance();
@@ -146,13 +161,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       _geminiKeyController.text = prefs.getString('gemini_api_key') ?? '';
       _includeBranded = prefs.getBool('usda_include_branded') ?? false;
     });
-
-    _performLiveCalculations();
   }
 
   void _performLiveCalculations() {
-    if (_calcMethod != 'calculator') return;
-
     final age = _calculatedAge;
     final height = double.tryParse(_heightController.text) ?? 175.0;
     final weight = _latestWeight;
@@ -347,15 +358,68 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   Future<void> _saveProfileAndGoals() async {
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
+    final currentProfile = _firestoreService.profileNotifier.value;
+    final updatedPhases = List<GoalPhase>.from(currentProfile.goalPhases);
+
+    final newCal = double.tryParse(_targetCalController.text) ?? 2000.0;
+    final newPro = double.tryParse(_targetProController.text) ?? 150.0;
+    final newCarb = double.tryParse(_targetCarbController.text) ?? 200.0;
+    final newFat = double.tryParse(_targetFatController.text) ?? 65.0;
+
+    // Record a manual target adjustment
+    final manualAdjustment = TargetAdjustment(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      date: todayStr,
+      targetCalories: newCal,
+      targetProteinG: newPro,
+      targetCarbsG: newCarb,
+      targetFatG: newFat,
+      acceptedByUser: false,
+      isManual: true,
+      notes: 'Manual profile settings update',
+    );
+
+    if (updatedPhases.isNotEmpty) {
+      final lastPhase = updatedPhases.removeLast();
+      final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
+        ..removeWhere((a) => a.date == todayStr)
+        ..add(manualAdjustment);
+
+      updatedPhases.add(GoalPhase(
+        id: lastPhase.id,
+        startDate: lastPhase.startDate,
+        endDate: lastPhase.endDate,
+        goal: _weeklyGoal,
+        goalType: lastPhase.goalType,
+        initialCalories: lastPhase.initialCalories,
+        initialProteinG: lastPhase.initialProteinG,
+        initialCarbsG: lastPhase.initialCarbsG,
+        initialFatG: lastPhase.initialFatG,
+        adjustments: adjList,
+      ));
+    } else {
+      updatedPhases.add(GoalPhase(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        startDate: todayStr,
+        goal: _weeklyGoal,
+        goalType: GoalType.maintain,
+        initialCalories: newCal,
+        initialProteinG: newPro,
+        initialCarbsG: newCarb,
+        initialFatG: newFat,
+        adjustments: [manualAdjustment],
+      ));
+    }
 
     final payload = UserProfile(
       id: '1',
       goalMode: _calcMethod,
-      targetCalories: double.tryParse(_targetCalController.text) ?? 2000.0,
-      targetProteinG: double.tryParse(_targetProController.text) ?? 150.0,
-      targetCarbsG: double.tryParse(_targetCarbController.text) ?? 200.0,
-      targetFatG: double.tryParse(_targetFatController.text) ?? 65.0,
+      targetCalories: newCal,
+      targetProteinG: newPro,
+      targetCarbsG: newCarb,
+      targetFatG: newFat,
       birthDate: birthDateStr,
       gender: _gender,
       height: double.tryParse(_heightController.text) ?? 175.0,
@@ -363,6 +427,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       activity: _activityLevel,
       goal: _weeklyGoal,
       proteinMultiplier: _proteinMultiplier,
+      goalHistory: currentProfile.goalHistory,
+      goalPhases: updatedPhases,
     );
 
     await _firestoreService.saveProfile(payload);
@@ -711,11 +777,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 2),
               const Text(
-                'Mifflin-St Jeor metabolic baseline with custom override',
+                'Mifflin-St Jeor metabolic baseline with adaptive adjustments',
                 style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 16),
 
+              // Active Goal Phase Info Pill
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
@@ -748,7 +815,57 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
+
+              // On-Demand Review Card if an adjustment is pending or dismissed
+              ValueListenableBuilder<WeeklyCheckInProposal?>(
+                valueListenable: AdaptiveCoachService().dismissedProposalNotifier,
+                builder: (context, proposal, _) {
+                  if (proposal == null) return const SizedBox.shrink();
+
+                  return InkWell(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      WeeklyCheckInSheet.show(context, proposal);
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.auto_awesome_rounded, size: 16, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Review Adaptive Adjustment',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textMain),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                '${proposal.proposedCalories} kcal',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.primary),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.primary),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
 
               Row(
                 children: [
@@ -797,7 +914,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 10),
               _buildSelectorTile(
-                label: 'Weekly Goal Preset',
+                label: 'Goal Strategy Preset',
                 value: _weeklyGoal,
                 items: const [
                   DropdownMenuItem(value: '-500', child: Text('Lose 2 kg/month (-500 kcal)')),
@@ -839,6 +956,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Target Summary Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -857,7 +975,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textMuted, letterSpacing: 0.5),
                         ),
                         Text(
-                          'Tap to manually adjust',
+                          'Tap to adjust manually',
                           style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.primary),
                         ),
                       ],
@@ -1085,7 +1203,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 13.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 color: isSelected ? AppColors.primary : AppColors.textMain,
               ),
