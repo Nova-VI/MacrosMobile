@@ -4,7 +4,7 @@ import '../models/food_item.dart';
 import '../services/gemini_service.dart';
 import '../theme/app_theme.dart';
 
-typedef AiMealParsedCallback = void Function(FoodItem food);
+typedef AiMealParsedCallback = void Function(FoodItem food, {double servings});
 typedef AiMealErrorCallback = void Function(String message, String lastPrompt);
 
 class AiMealPromptSheet extends StatefulWidget {
@@ -114,7 +114,7 @@ class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
     if (result.status == AiAnalysisStatus.success && result.foodItem != null) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
-      widget.onMealParsed(result.foodItem!);
+      widget.onMealParsed(result.foodItem!, servings: result.servings);
       return;
     }
 
@@ -243,7 +243,7 @@ class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
               style: const TextStyle(color: AppColors.textMain, fontSize: 14),
               decoration: InputDecoration(
                 hintText:
-                    'e.g., 200g grilled turkey escalope with 150g cooked pasta and 1 tbsp olive oil...',
+                    'e.g., 200g grilled chicken breast with 150g cooked pasta and 1 tbsp olive oil...',
                 fillColor: AppColors.background,
                 filled: true,
                 border: OutlineInputBorder(

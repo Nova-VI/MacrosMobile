@@ -280,6 +280,9 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
+ // Relevant excerpt update from lib/screens/log_food_screen.dart
+// Inside LogFoodScreenState:
+
   Future<void> _openAiMealPrompt() async {
     HapticFeedback.lightImpact();
 
@@ -294,9 +297,9 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     AiMealPromptSheet.show(
       context,
       initialText: _lastAiPromptDraft,
-      onMealParsed: (parsedFood) {
+      onMealParsed: (parsedFood, {double servings = 1.0}) {
         _lastAiPromptDraft = '';
-        _populateFromAiAnalysis(parsedFood);
+        _populateFromAiAnalysis(parsedFood, servings: servings);
       },
       onError: (errorMessage, lastPrompt) {
         _lastAiPromptDraft = lastPrompt;
@@ -373,7 +376,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  void _populateFromAiAnalysis(FoodItem food) {
+ 
+  void _populateFromAiAnalysis(FoodItem food, {double servings = 1.0}) {
     _editingLogId = null;
     _isLibraryBound = false;
     _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
@@ -382,20 +386,26 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _servingUnitController.text = food.servingName;
 
     final baseG = (food.servingSizeG > 0) ? food.servingSizeG : 100.0;
+    final totalG = baseG * servings;
+
     _servingSizeController.text = (baseG % 1 == 0)
         ? baseG.toInt().toString()
         : baseG.toStringAsFixed(1);
-    _servingsController.text = '1';
-    _totalAmountController.text = _servingSizeController.text;
+    _servingsController.text = (servings % 1 == 0)
+        ? servings.toInt().toString()
+        : servings.toStringAsFixed(2);
+    _totalAmountController.text = (totalG % 1 == 0)
+        ? totalG.toInt().toString()
+        : totalG.toStringAsFixed(1);
 
-    final pro = food.macros.proteinG;
-    final carb = food.macros.carbsG;
-    final fat = food.macros.fatG;
-    final dynamicCalories = (pro * 4.0) + (carb * 4.0) + (fat * 9.0);
+    final totalPro = food.macros.proteinG;
+    final totalCarb = food.macros.carbsG;
+    final totalFat = food.macros.fatG;
+    final dynamicCalories = (totalPro * 4.0) + (totalCarb * 4.0) + (totalFat * 9.0);
 
-    _proteinController.text = pro > 0 ? pro.toStringAsFixed(1) : '';
-    _carbsController.text = carb > 0 ? carb.toStringAsFixed(1) : '';
-    _fatController.text = fat > 0 ? fat.toStringAsFixed(1) : '';
+    _proteinController.text = totalPro > 0 ? totalPro.toStringAsFixed(1) : '';
+    _carbsController.text = totalCarb > 0 ? totalCarb.toStringAsFixed(1) : '';
+    _fatController.text = totalFat > 0 ? totalFat.toStringAsFixed(1) : '';
     _caloriesController.text = dynamicCalories > 0 ? dynamicCalories.round().toString() : '';
 
     final mic = food.micros;
@@ -411,6 +421,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _calciumController.text = mic.calciumMg > 0 ? mic.calciumMg.round().toString() : '';
     _ironController.text = mic.ironMg > 0 ? mic.ironMg.toStringAsFixed(1) : '';
 
+    final basePro = servings > 0 ? (totalPro / servings) : totalPro;
+    final baseCarb = servings > 0 ? (totalCarb / servings) : totalCarb;
+    final baseFat = servings > 0 ? (totalFat / servings) : totalFat;
+    final baseCal = servings > 0 ? (dynamicCalories / servings) : dynamicCalories;
+
     _currentBaseFood = FoodItem(
       id: '',
       name: food.name,
@@ -420,12 +435,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       servingName: food.servingName,
       emoji: _selectedEmoji,
       macros: MacroNutrients(
-        proteinG: pro,
-        carbsG: carb,
-        fatG: fat,
-        calories: dynamicCalories,
+        proteinG: basePro,
+        carbsG: baseCarb,
+        fatG: baseFat,
+        calories: baseCal,
       ),
-      micros: mic,
+      micros: mic.scale(servings > 0 ? 1.0 / servings : 1.0),
     );
 
     _showToast('Loaded "${food.name}" into Quick Log');

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_profile.dart';
 import 'adaptive_coach_engine.dart';
 import 'firestore_service.dart';
@@ -249,8 +250,24 @@ class AdaptiveCoachService {
       stateSnapshot: latestState,
     );
 
+    // Cross-Device Dismissal Check (Firestore + SharedPreferences cache)
     final prefs = await SharedPreferences.getInstance();
-    final dismissedDate = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
+    String? dismissedDate = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
+
+    if (dismissedDate == null && uid != null) {
+      try {
+        final settingsDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('settings')
+            .doc('config')
+            .get(const GetOptions(source: Source.serverAndCache));
+        if (settingsDoc.exists && settingsDoc.data()?['dismissed_checkin_date'] != null) {
+          dismissedDate = settingsDoc.data()!['dismissed_checkin_date'].toString();
+          await prefs.setString('dismissed_checkin_date_$uid', dismissedDate);
+        }
+      } catch (_) {}
+    }
 
     if (dismissedDate == todayStr) {
       checkInProposalNotifier.value = null;
@@ -332,6 +349,16 @@ class AdaptiveCoachService {
     if (uid != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('dismissed_checkin_date_$uid');
+
+      // Clear dismissal date from Firestore
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('settings')
+          .doc('config')
+          .set({
+        'dismissed_checkin_date': null,
+      }, SetOptions(merge: true));
     }
 
     await _firestoreService.saveProfile(updatedProfile);
@@ -347,6 +374,16 @@ class AdaptiveCoachService {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('dismissed_checkin_date_$uid', proposal.date);
+
+      // Persist dismissal date to Firestore for seamless cross-device synchronization
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('settings')
+          .doc('config')
+          .set({
+        'dismissed_checkin_date': proposal.date,
+      }, SetOptions(merge: true));
     }
   }
 }
