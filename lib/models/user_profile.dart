@@ -296,7 +296,10 @@ extension UserProfileGoalExtension on UserProfile {
 
   DayTarget getTargetForDate(String dateStr, {String? earliestLogDate}) {
     if (goalPhases.isNotEmpty) {
-      for (final phase in goalPhases) {
+      final sortedPhases = List<GoalPhase>.from(goalPhases)
+        ..sort((a, b) => b.startDate.compareTo(a.startDate));
+
+      for (final phase in sortedPhases) {
         final afterStart = dateStr.compareTo(phase.startDate) >= 0;
         final beforeEnd = phase.endDate == null || dateStr.compareTo(phase.endDate!) <= 0;
         if (afterStart && beforeEnd) {
