@@ -1,4 +1,3 @@
-// lib/services/firestore_service.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +9,7 @@ import '../models/daily_log.dart';
 import '../models/weight_log.dart';
 import '../models/user_profile.dart';
 import 'auth_service.dart';
+import 'adaptive_coach_service.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -76,6 +76,7 @@ class FirestoreService {
         }
 
         _isReady = true;
+        AdaptiveCoachService().recomputeAndEvaluate();
         return true;
       }
     } catch (_) {}
@@ -115,7 +116,9 @@ class FirestoreService {
       _lastSyncTimestamp = DateTime.now().millisecondsSinceEpoch;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('last_sync_timestamp_$uid', _lastSyncTimestamp);
+      
       _isReady = true;
+      AdaptiveCoachService().recomputeAndEvaluate();
     } catch (_) {}
   }
 
@@ -199,6 +202,7 @@ class FirestoreService {
       _lastSyncTimestamp = remoteLastModified;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('last_sync_timestamp_$uid', _lastSyncTimestamp);
+      AdaptiveCoachService().recomputeAndEvaluate();
     } catch (_) {}
   }
 
