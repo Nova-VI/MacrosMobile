@@ -701,6 +701,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     final total = newBase * mult;
     _totalAmountController.text = (total % 1 == 0) ? total.toInt().toString() : total.toStringAsFixed(1);
     _scaleNutrients(mult);
+    setState(() {});
   }
 
   void _onServingsChanged(String val) {
@@ -710,6 +711,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _totalAmountController.text = (total % 1 == 0) ? total.toInt().toString() : total.toStringAsFixed(1);
     _scaleNutrients(mult);
     _updateFloatingButtonVisibility();
+    setState(() {});
   }
 
   void _onTotalAmountChanged(String val) {
@@ -720,6 +722,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       _servingsController.text = (mult % 1 == 0) ? mult.toInt().toString() : mult.toStringAsFixed(2);
       _scaleNutrients(mult);
       _updateFloatingButtonVisibility();
+      setState(() {});
     }
   }
 
@@ -757,6 +760,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: _getParsedMicros().scale(1.0 / m),
     );
     _updateFloatingButtonVisibility();
+    setState(() {});
   }
 
   void _openEmojiPicker() {
@@ -1059,75 +1063,81 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
   Widget _buildFloatingLogBubble() {
     final isEditing = _editingLogId != null;
-    final cals = _caloriesController.text.isNotEmpty ? _caloriesController.text : '0';
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-      builder: (context, val, child) {
-        return Transform.scale(
-          scale: 0.9 + (0.1 * val),
-          child: Opacity(opacity: val, child: child),
-        );
-      },
-      child: Material(
-        color: Colors.transparent,
-        elevation: 8,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          onTap: _submitLog,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
+    return ListenableBuilder(
+      listenable: _caloriesController,
+      builder: (context, _) {
+        final cals = _caloriesController.text.isNotEmpty ? _caloriesController.text : '0';
+
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0.0, end: 1.0),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          builder: (context, val, child) {
+            return Transform.scale(
+              scale: 0.9 + (0.1 * val),
+              child: Opacity(opacity: val, child: child),
+            );
+          },
+          child: Material(
+            color: Colors.transparent,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              onTap: _submitLog,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(_selectedEmoji, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 10),
-                    Text(
-                      isEditing ? 'Update Entry' : 'Log Food',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                    Row(
+                      children: [
+                        Text(_selectedEmoji, style: const TextStyle(fontSize: 20)),
+                        const SizedBox(width: 10),
+                        Text(
+                          isEditing ? 'Update Entry' : 'Log Food',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$cals kcal',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$cals kcal',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
