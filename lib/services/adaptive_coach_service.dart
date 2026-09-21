@@ -165,7 +165,7 @@ class AdaptiveCoachService {
     );
   }
 
-  Future<void> _evaluateWeeklyCheckInEligibility({
+Future<void> _evaluateWeeklyCheckInEligibility({
     required UserProfile profile,
     required AdaptiveCoachState latestState,
     required Map<String, double> dailyCaloriesMap,
@@ -250,11 +250,11 @@ class AdaptiveCoachService {
       stateSnapshot: latestState,
     );
 
-    // Cross-Device Dismissal Check (Firestore + SharedPreferences cache)
+    // Cross-Device Dismissal Check
     final prefs = await SharedPreferences.getInstance();
-    String? dismissedDate = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
+    String? dismissedDateStr = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
 
-    if (dismissedDate == null && uid != null) {
+    if (dismissedDateStr == null && uid != null) {
       try {
         final settingsDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -263,13 +263,23 @@ class AdaptiveCoachService {
             .doc('config')
             .get(const GetOptions(source: Source.serverAndCache));
         if (settingsDoc.exists && settingsDoc.data()?['dismissed_checkin_date'] != null) {
-          dismissedDate = settingsDoc.data()!['dismissed_checkin_date'].toString();
-          await prefs.setString('dismissed_checkin_date_$uid', dismissedDate);
+          dismissedDateStr = settingsDoc.data()!['dismissed_checkin_date'].toString();
+          await prefs.setString('dismissed_checkin_date_$uid', dismissedDateStr);
         }
       } catch (_) {}
     }
 
-    if (dismissedDate == todayStr) {
+    // Calculate elapsed days since the dismissal event
+    int daysSinceDismissal = 999;
+    if (dismissedDateStr != null && dismissedDateStr.isNotEmpty) {
+      try {
+        final d = DateFormat('yyyy-MM-dd').parse(dismissedDateStr);
+        daysSinceDismissal = today.difference(d).inDays;
+      } catch (_) {}
+    }
+
+    // Leave the user alone for 7 full days from dismissal
+    if (daysSinceDismissal < 7) {
       checkInProposalNotifier.value = null;
       dismissedProposalNotifier.value = proposal;
     } else {
