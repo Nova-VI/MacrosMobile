@@ -165,7 +165,7 @@ class AdaptiveCoachService {
     );
   }
 
-Future<void> _evaluateWeeklyCheckInEligibility({
+  Future<void> _evaluateWeeklyCheckInEligibility({
     required UserProfile profile,
     required AdaptiveCoachState latestState,
     required Map<String, double> dailyCaloriesMap,
@@ -250,26 +250,10 @@ Future<void> _evaluateWeeklyCheckInEligibility({
       stateSnapshot: latestState,
     );
 
-    // Cross-Device Dismissal Check
+    // Read the live synced date from local cache (kept 100% up-to-date by the Firestore config listener)
     final prefs = await SharedPreferences.getInstance();
-    String? dismissedDateStr = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
+    final dismissedDateStr = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
 
-    if (dismissedDateStr == null && uid != null) {
-      try {
-        final settingsDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .collection('settings')
-            .doc('config')
-            .get(const GetOptions(source: Source.serverAndCache));
-        if (settingsDoc.exists && settingsDoc.data()?['dismissed_checkin_date'] != null) {
-          dismissedDateStr = settingsDoc.data()!['dismissed_checkin_date'].toString();
-          await prefs.setString('dismissed_checkin_date_$uid', dismissedDateStr);
-        }
-      } catch (_) {}
-    }
-
-    // Calculate elapsed days since the dismissal event
     int daysSinceDismissal = 999;
     if (dismissedDateStr != null && dismissedDateStr.isNotEmpty) {
       try {
@@ -278,7 +262,7 @@ Future<void> _evaluateWeeklyCheckInEligibility({
       } catch (_) {}
     }
 
-    // Leave the user alone for 7 full days from dismissal
+    // Suppress active banner for 7 full days from dismissal
     if (daysSinceDismissal < 7) {
       checkInProposalNotifier.value = null;
       dismissedProposalNotifier.value = proposal;

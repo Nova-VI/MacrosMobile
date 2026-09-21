@@ -40,24 +40,45 @@ class FirestoreService {
     return uid;
   }
 
+  static int compareLogsChronologically(DailyLog a, DailyLog b) {
+    DateTime dtA;
+    DateTime dtB;
+    try {
+      dtA = DateTime.parse(a.loggedAt).toLocal();
+    } catch (_) {
+      dtA = DateTime(1970);
+    }
+    try {
+      dtB = DateTime.parse(b.loggedAt).toLocal();
+    } catch (_) {
+      dtB = DateTime(1970);
+    }
+    final cmp = dtA.compareTo(dtB);
+    if (cmp != 0) return cmp;
+    return a.id.compareTo(b.id);
+  }
+
   // --- Flattening Helpers for UI Streams ---
   void _rebuildFlatLogs() {
     final List<DailyLog> allLogs = [];
+
     for (final monthData in _monthCache.values) {
-      final daysMap = monthData['days'] as Map<String, dynamic>? ?? {};
-      for (final dayList in daysMap.values) {
-        if (dayList is List) {
-          for (final rawItem in dayList) {
-            if (rawItem is Map) {
-              final map = Map<String, dynamic>.from(rawItem);
-              final id = map['id']?.toString() ?? '';
-              allLogs.add(DailyLog.fromFirestore(id, map));
+      final rawItems = monthData['items'];
+      if (rawItems is Map) {
+        rawItems.forEach((key, val) {
+          if (val is Map) {
+            final map = Map<String, dynamic>.from(val);
+            final id = key.toString();
+            final log = DailyLog.fromFirestore(id, map);
+            if (log.id.isNotEmpty && log.date.isNotEmpty) {
+              allLogs.add(log);
             }
           }
-        }
+        });
       }
     }
-    allLogs.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+
+    allLogs.sort(compareLogsChronologically);
     logsNotifier.value = allLogs;
     AdaptiveCoachService().recomputeAndEvaluate();
   }
@@ -106,10 +127,10 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  // --- Initial Device Hydration (First Login on this device) ---
+  // --- Initial Device Hydration ---
   Future<void> _hydrateNewDevice(String uid) async {
     final prefs = await SharedPreferences.getInstance();
-    final hydrationKey = 'hydrated_v2_$uid';
+    final hydrationKey = 'hydrated_v6_$uid';
     final alreadyHydrated = prefs.getBool(hydrationKey) ?? false;
 
     if (!alreadyHydrated) {
@@ -149,14 +170,13 @@ class FirestoreService {
     }
   }
 
-  // --- Realtime Listeners Initialization ---
+  // --- Realtime Listeners Initialization (Total: 7 Listeners) ---
   void initializeListeners(String uid) {
     cancelListeners();
 
-    // 1. Initial Device Hydration
     _hydrateNewDevice(uid);
 
-    // 2. User Document Stream
+    // 1. User Account Stream
     final userSub = _db.collection('users').doc(uid).snapshots().listen((doc) async {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
@@ -180,7 +200,7 @@ class FirestoreService {
     });
     _subscriptions['user'] = userSub;
 
-    // 3. Continuous 2-Month Active Watch (Current + Previous Month)
+    // 2 & 3. Active 2-Month Stream (Current + Previous Month)
     final now = DateTime.now();
     final currentMonthKey = DateFormat('yyyy-MM').format(now);
     final prevMonthDate = DateTime(now.year, now.month - 1, 1);
@@ -189,7 +209,7 @@ class FirestoreService {
     ensureMonthSubscribed(currentMonthKey);
     ensureMonthSubscribed(prevMonthKey);
 
-    // 4. Single Lifetime Weight Document Stream (1 read)
+    // 4. Lifetime Weight Stream
     final weightSub = _db.collection('users').doc(uid).collection('weight_logs').doc('all').snapshots().listen((snap) {
       if (snap.exists && snap.data() != null) {
         final entries = snap.data()!['entries'] as Map<String, dynamic>? ?? {};
@@ -203,7 +223,7 @@ class FirestoreService {
     });
     _subscriptions['weights'] = weightSub;
 
-    // 5. Food Library Single-Doc Stream (1 read)
+    // 5. Food & Recipe Library Stream
     final foodSub = _db.collection('users').doc(uid).collection('foods').doc('library').snapshots().listen((snap) {
       if (snap.exists && snap.data() != null) {
         final items = snap.data()!['items'] as Map<String, dynamic>? ?? {};
@@ -218,7 +238,7 @@ class FirestoreService {
     });
     _subscriptions['foods'] = foodSub;
 
-    // 6. Profile Stream (1 read)
+    // 6. User Profile Stream
     final profileSub = _db.collection('users').doc(uid).collection('profile').doc('1').snapshots().listen((doc) {
       if (doc.exists && doc.data() != null) {
         profileNotifier.value = UserProfile.fromFirestore(doc.data());
@@ -226,6 +246,24 @@ class FirestoreService {
       }
     });
     _subscriptions['profile'] = profileSub;
+
+    // 7. Settings & Config Stream (Syncs cross-device dismissal & API keys in real time)
+    final settingsSub = _db.collection('users').doc(uid).collection('settings').doc('config').snapshots().listen((snap) {
+      if (snap.exists && snap.data() != null) {
+        final data = snap.data()!;
+        final remoteDismissedDate = data['dismissed_checkin_date']?.toString();
+        
+        SharedPreferences.getInstance().then((prefs) {
+          if (remoteDismissedDate != null && remoteDismissedDate.isNotEmpty) {
+            prefs.setString('dismissed_checkin_date_$uid', remoteDismissedDate);
+          } else {
+            prefs.remove('dismissed_checkin_date_$uid');
+          }
+          AdaptiveCoachService().recomputeAndEvaluate();
+        });
+      }
+    });
+    _subscriptions['settings'] = settingsSub;
   }
 
   void cancelListeners() {
@@ -247,7 +285,9 @@ class FirestoreService {
   List<DailyLog> getLogsForDate(String date) {
     final monthKey = date.length >= 7 ? date.substring(0, 7) : '';
     if (monthKey.isNotEmpty) ensureMonthSubscribed(monthKey);
-    return logsNotifier.value.where((log) => log.date == date).toList();
+    final list = logsNotifier.value.where((log) => log.date == date).toList();
+    list.sort(compareLogsChronologically);
+    return list;
   }
 
   List<FoodItem> getFavoriteFoods() {
@@ -268,9 +308,12 @@ class FirestoreService {
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
 
-  // --- CRUD: Food Logs (Routes to Month Buckets) ---
+  // --- CRUD: Food Logs (Conflict-Free Map Entries under items.<logId>) ---
   Future<String> addLog(DailyLog log) async {
-    final String id = log.id.isNotEmpty ? log.id : 'log_${DateTime.now().millisecondsSinceEpoch}';
+    final String id = log.id.isNotEmpty
+        ? log.id
+        : 'log_${DateTime.now().millisecondsSinceEpoch}_${(1000 + (DateTime.now().microsecond % 9000))}';
+
     final resolvedLog = DailyLog(
       id: id,
       date: log.date,
@@ -287,25 +330,23 @@ class FirestoreService {
     );
 
     final monthKey = log.date.substring(0, 7);
-    final dateKey = log.date;
 
-    // 1. Optimistic Local Update
     if (!_monthCache.containsKey(monthKey)) {
-      _monthCache[monthKey] = {'month': monthKey, 'days': {}};
+      _monthCache[monthKey] = {'month': monthKey, 'items': <String, dynamic>{}};
     }
-    final daysMap = _monthCache[monthKey]!['days'] as Map<String, dynamic>;
-    final List<dynamic> dayList = List.from(daysMap[dateKey] as List<dynamic>? ?? []);
-    dayList.add(resolvedLog.toMap());
-    daysMap[dateKey] = dayList;
+    if (_monthCache[monthKey]!['items'] is! Map) {
+      _monthCache[monthKey]!['items'] = <String, dynamic>{};
+    }
+    final itemsMap = _monthCache[monthKey]!['items'] as Map<String, dynamic>;
+    itemsMap[id] = resolvedLog.toMap();
 
     _rebuildFlatLogs();
 
-    // 2. Cloud Month Bucket Write
     _db.collection('users').doc(_uid).collection('logs').doc(monthKey).set({
       'month': monthKey,
-      'days': {
-        dateKey: dayList,
-      }
+      'items': {
+        id: resolvedLog.toMap(),
+      },
     }, SetOptions(merge: true));
 
     return id;
@@ -313,73 +354,108 @@ class FirestoreService {
 
   Future<void> updateLog(String id, Map<String, dynamic> changes) async {
     String? foundMonthKey;
-    String? foundDateKey;
-    List<dynamic>? targetList;
+    Map<String, dynamic>? updatedMap;
 
     for (final entry in _monthCache.entries) {
-      final daysMap = entry.value['days'] as Map<String, dynamic>? ?? {};
-      for (final dayEntry in daysMap.entries) {
-        final list = List.from(dayEntry.value as List<dynamic>? ?? []);
-        final idx = list.indexWhere((item) => item is Map && item['id'] == id);
-        if (idx != -1) {
-          final oldItem = Map<String, dynamic>.from(list[idx] as Map);
-          oldItem.addAll(changes);
-          list[idx] = oldItem;
-          daysMap[dayEntry.key] = list;
-
-          foundMonthKey = entry.key;
-          foundDateKey = dayEntry.key;
-          targetList = list;
-          break;
-        }
+      final itemsMap = entry.value['items'];
+      if (itemsMap is Map && itemsMap.containsKey(id)) {
+        foundMonthKey = entry.key;
+        final existing = Map<String, dynamic>.from(itemsMap[id] as Map);
+        existing.addAll(changes);
+        existing['id'] = id;
+        itemsMap[id] = existing;
+        updatedMap = existing;
+        break;
       }
-      if (foundMonthKey != null) break;
     }
 
-    if (foundMonthKey != null && foundDateKey != null && targetList != null) {
+    if (foundMonthKey != null && updatedMap != null) {
       _rebuildFlatLogs();
+
       _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
-        'days': {
-          foundDateKey: targetList,
-        }
+        'items': {
+          id: updatedMap,
+        },
       }, SetOptions(merge: true));
     }
   }
 
-  Future<void> deleteLog(String id) async {
+  Future<void> deleteLog(String id, {String? date}) async {
     String? foundMonthKey;
-    String? foundDateKey;
-    List<dynamic>? targetList;
+    String targetKey = id;
 
-    for (final entry in _monthCache.entries) {
-      final daysMap = entry.value['days'] as Map<String, dynamic>? ?? {};
-      for (final dayEntry in daysMap.entries) {
-        final list = List.from(dayEntry.value as List<dynamic>? ?? []);
-        final idx = list.indexWhere((item) => item is Map && item['id'] == id);
-        if (idx != -1) {
-          list.removeAt(idx);
-          daysMap[dayEntry.key] = list;
-
-          foundMonthKey = entry.key;
-          foundDateKey = dayEntry.key;
-          targetList = list;
-          break;
+    if (date != null && date.length >= 7) {
+      foundMonthKey = date.substring(0, 7);
+      final monthData = _monthCache[foundMonthKey];
+      final itemsMap = monthData?['items'];
+      if (itemsMap is Map) {
+        if (itemsMap.containsKey(id)) {
+          targetKey = id;
+          itemsMap.remove(id);
+        } else {
+          final matchedKey = itemsMap.keys.firstWhere(
+            (k) => itemsMap[k] is Map && itemsMap[k]['id'] == id,
+            orElse: () => null,
+          );
+          if (matchedKey != null) {
+            targetKey = matchedKey.toString();
+            itemsMap.remove(matchedKey);
+          }
         }
       }
-      if (foundMonthKey != null) break;
     }
 
-    if (foundMonthKey != null && foundDateKey != null && targetList != null) {
-      _rebuildFlatLogs();
-      _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
-        'days': {
-          foundDateKey: targetList,
+    if (foundMonthKey == null || !_monthCache.containsKey(foundMonthKey)) {
+      for (final entry in _monthCache.entries) {
+        final itemsMap = entry.value['items'];
+        if (itemsMap is Map) {
+          if (itemsMap.containsKey(id)) {
+            foundMonthKey = entry.key;
+            targetKey = id;
+            itemsMap.remove(id);
+            break;
+          } else {
+            final matchedKey = itemsMap.keys.firstWhere(
+              (k) => itemsMap[k] is Map && itemsMap[k]['id'] == id,
+              orElse: () => null,
+            );
+            if (matchedKey != null) {
+              foundMonthKey = entry.key;
+              targetKey = matchedKey.toString();
+              itemsMap.remove(matchedKey);
+              break;
+            }
+          }
         }
-      }, SetOptions(merge: true));
+      }
+    }
+
+    _rebuildFlatLogs();
+
+    if (foundMonthKey != null) {
+      final docRef = _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey);
+
+      try {
+        await docRef.update({
+          FieldPath(['items', targetKey]): FieldValue.delete(),
+        });
+      } catch (_) {
+        try {
+          final snap = await docRef.get();
+          if (snap.exists && snap.data() != null) {
+            final items = Map<String, dynamic>.from(snap.data()!['items'] as Map? ?? {});
+            items.remove(targetKey);
+            items.remove(id);
+            await docRef.set({'items': items}, SetOptions(merge: true));
+          }
+        } catch (e) {
+          debugPrint('[FirestoreService] Delete failed: $e');
+        }
+      }
     }
   }
 
-  // --- CRUD: Weight Tracker (Routes to weight_logs/all) ---
+  // --- CRUD: Weight Tracker ---
   Future<void> setWeightLog(WeightLog log) async {
     _weightCache[log.date] = log.weightKg;
     _rebuildFlatWeights();
@@ -404,7 +480,7 @@ class FirestoreService {
     });
   }
 
-  // --- CRUD: Food Library (Routes to foods/library) ---
+  // --- CRUD: Food Library ---
   Future<String> addFood(FoodItem food) async {
     final String id = food.id.isNotEmpty ? food.id : 'food_${DateTime.now().millisecondsSinceEpoch}';
     final resolvedFood = FoodItem(

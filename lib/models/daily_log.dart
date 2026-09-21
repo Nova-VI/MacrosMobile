@@ -29,10 +29,12 @@ class DailyLog {
     required this.micros,
   });
 
-factory DailyLog.fromFirestore(String id, Map<String, dynamic>? data) {
+  factory DailyLog.fromFirestore(String id, Map<String, dynamic>? data) {
+    final effectiveId = id.isNotEmpty ? id : (data?['id']?.toString() ?? '');
+
     if (data == null || data['_deleted'] == true) {
       return DailyLog(
-        id: id,
+        id: effectiveId,
         date: '',
         loggedAt: '',
         foodName: '',
@@ -42,7 +44,7 @@ factory DailyLog.fromFirestore(String id, Map<String, dynamic>? data) {
     }
 
     return DailyLog(
-      id: id,
+      id: effectiveId,
       date: data['date'] ?? '',
       loggedAt: data['logged_at'] ?? DateTime.now().toIso8601String(),
       foodId: data['food_id']?.toString(),
@@ -59,6 +61,7 @@ factory DailyLog.fromFirestore(String id, Map<String, dynamic>? data) {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'date': date,
       'logged_at': loggedAt,
       'food_id': foodId,

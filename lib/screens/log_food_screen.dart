@@ -280,9 +280,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
- // Relevant excerpt update from lib/screens/log_food_screen.dart
-// Inside LogFoodScreenState:
-
   Future<void> _openAiMealPrompt() async {
     HapticFeedback.lightImpact();
 
@@ -376,7 +373,6 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
- 
   void _populateFromAiAnalysis(FoodItem food, {double servings = 1.0}) {
     _editingLogId = null;
     _isLibraryBound = false;
@@ -966,7 +962,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                   ),
                   onPressed: () {
                     Navigator.pop(ctx, true);
-                    _firestoreService.deleteLog(_editingLogId!);
+                    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+                    _firestoreService.deleteLog(_editingLogId!, date: dateStr);
                     HapticFeedback.mediumImpact();
                     _showToast('Daily log entry deleted.');
                     widget.onLogCompleted();
@@ -1150,8 +1147,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               hintText: 'Search foods...',
               prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted, size: 20),
               suffixIcon: _isSearching
-                  ?  Padding(
-                      padding: EdgeInsets.all(12),
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
                       child: SizedBox(
                         width: 16,
                         height: 16,
@@ -1199,7 +1196,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               ),
             ),
             alignment: Alignment.center,
-            child:  Icon(
+            child: Icon(
               Icons.qr_code_scanner_rounded,
               color: AppColors.primary,
               size: 22,
@@ -1642,7 +1639,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
               setState(() => _isManualCalories = v.isNotEmpty);
               _onManualNutrientTyped();
             },
-            style:  TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
+            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 16),
             decoration: InputDecoration(
               labelText: 'Calories (kcal)',
               suffixIcon: _isManualCalories
@@ -1653,7 +1650,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                         color: AppColors.primary.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child:  Text(
+                      child: Text(
                         '✎ manual',
                         style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
@@ -1677,7 +1674,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     size: 20,
                   ),
                   const SizedBox(width: 4),
-                   Text(
+                  Text(
                     'Hide Micronutrients',
                     style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
                   ),

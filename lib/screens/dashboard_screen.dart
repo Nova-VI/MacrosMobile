@@ -50,19 +50,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AdaptiveCoachService().recomputeAndEvaluate();
     });
-
-    FirestoreService().logsNotifier.addListener(_onDataChanged);
-    FirestoreService().weightLogsNotifier.addListener(_onDataChanged);
-  }
-
-  void _onDataChanged() {
-    AdaptiveCoachService().recomputeAndEvaluate();
   }
 
   @override
   void dispose() {
-    FirestoreService().logsNotifier.removeListener(_onDataChanged);
-    FirestoreService().weightLogsNotifier.removeListener(_onDataChanged);
     _pageController.dispose();
     _selectedDateNotifier.dispose();
     _showRemainingNotifier.dispose();
@@ -91,8 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final targetPage = _pageController.page!.round() + offset;
     final targetDate = _getDateForPage(targetPage);
     final monthKey = DateFormat('yyyy-MM').format(targetDate);
-    
-    // On-Demand Month Subscription
+
     FirestoreService().ensureMonthSubscribed(monthKey);
 
     _pageController.animateToPage(
@@ -125,8 +115,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (picked != null) {
       final monthKey = DateFormat('yyyy-MM').format(picked);
-      
-      // On-Demand Month Subscription
       FirestoreService().ensureMonthSubscribed(monthKey);
 
       final targetPage = _getPageForDate(picked);
@@ -140,132 +128,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
-
-    return ValueListenableBuilder<List<DailyLog>>(
-      valueListenable: firestoreService.logsNotifier,
-      builder: (context, allLogs, _) {
-        return ValueListenableBuilder<UserProfile>(
-          valueListenable: firestoreService.profileNotifier,
-          builder: (context, profile, _) {
-            return Column(
-              children: [
-                const WeeklyCheckInBanner(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: ValueListenableBuilder<DateTime>(
-                    valueListenable: _selectedDateNotifier,
-                    builder: (context, currentDate, _) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.border),
-                        ),
+    return Column(
+      children: [
+        const WeeklyCheckInBanner(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: ValueListenableBuilder<DateTime>(
+            valueListenable: _selectedDateNotifier,
+            builder: (context, currentDate, _) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textMain, size: 26),
+                      onPressed: () => _goToPageOffset(-1),
+                      tooltip: 'Previous Day',
+                    ),
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textMain, size: 26),
-                              onPressed: () => _goToPageOffset(-1),
-                              tooltip: 'Previous Day',
-                            ),
-                            InkWell(
-                              onTap: _pickDate,
-                              borderRadius: BorderRadius.circular(12),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _getDateHeaderTitle(currentDate),
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.textMain,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              _getDateHeaderTitle(currentDate),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textMain,
+                                letterSpacing: -0.3,
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textMain, size: 26),
-                              onPressed: () => _goToPageOffset(1),
-                              tooltip: 'Next Day',
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
-                ),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
+                      ),
                     ),
-                    findChildIndexCallback: (Key key) {
-                      if (key is ValueKey<String>) {
-                        try {
-                          final parsedDate = DateFormat('yyyy-MM-dd').parse(key.value);
-                          return _getPageForDate(parsedDate);
-                        } catch (_) {
-                          return null;
-                        }
-                      }
-                      return null;
-                    },
-                    onPageChanged: (pageIndex) {
-                      final pageDate = _getDateForPage(pageIndex);
-                      final monthKey = DateFormat('yyyy-MM').format(pageDate);
-                      
-                      // On-Demand Month Subscription when swiping between days
-                      FirestoreService().ensureMonthSubscribed(monthKey);
-                      _selectedDateNotifier.value = pageDate;
-                    },
-                    itemBuilder: (context, pageIndex) {
-                      final pageDate = _getDateForPage(pageIndex);
-                      final dateKey = DateFormat('yyyy-MM-dd').format(pageDate);
-                      final dayLogs = allLogs.where((l) => l.date == dateKey).toList();
-
-                      return _DashboardDayView(
-                        key: ValueKey(dateKey),
-                        pageDate: pageDate,
-                        dayLogs: dayLogs,
-                        profile: profile,
-                        showRemainingNotifier: _showRemainingNotifier,
-                        onNavigateToLogWithDate: widget.onNavigateToLogWithDate,
-                      );
-                    },
-                  ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right_rounded, color: AppColors.textMain, size: 26),
+                      onPressed: () => _goToPageOffset(1),
+                      tooltip: 'Next Day',
+                    ),
+                  ],
                 ),
-              ],
-            );
-          },
-        );
-      },
+              );
+            },
+          ),
+        ),
+        Expanded(
+          child: PageView.builder(
+            controller: _pageController,
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            onPageChanged: (pageIndex) {
+              final pageDate = _getDateForPage(pageIndex);
+              final monthKey = DateFormat('yyyy-MM').format(pageDate);
+              FirestoreService().ensureMonthSubscribed(monthKey);
+              _selectedDateNotifier.value = pageDate;
+            },
+            itemBuilder: (context, pageIndex) {
+              final pageDate = _getDateForPage(pageIndex);
+              final dateKey = DateFormat('yyyy-MM-dd').format(pageDate);
+
+              return _DashboardDayView(
+                key: ValueKey('day_view_$dateKey'),
+                pageDate: pageDate,
+                dateKey: dateKey,
+                showRemainingNotifier: _showRemainingNotifier,
+                onNavigateToLogWithDate: widget.onNavigateToLogWithDate,
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _DashboardDayView extends StatefulWidget {
   final DateTime pageDate;
-  final List<DailyLog> dayLogs;
-  final UserProfile profile;
+  final String dateKey;
   final ValueNotifier<bool> showRemainingNotifier;
   final Function(DateTime date, {DailyLog? editLog}) onNavigateToLogWithDate;
 
   const _DashboardDayView({
     super.key,
     required this.pageDate,
-    required this.dayLogs,
-    required this.profile,
+    required this.dateKey,
     required this.showRemainingNotifier,
     required this.onNavigateToLogWithDate,
   });
@@ -274,12 +233,9 @@ class _DashboardDayView extends StatefulWidget {
   State<_DashboardDayView> createState() => _DashboardDayViewState();
 }
 
-class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeepAliveClientMixin {
+class _DashboardDayViewState extends State<_DashboardDayView> {
   final Set<String> _expandedLogIds = {};
   final Set<DayPhase> _collapsedPhases = {};
-
-  @override
-  bool get wantKeepAlive => true;
 
   DayPhase _getLogPhase(DailyLog log) {
     if (log.loggedAt.isEmpty) return DayPhase.afternoon;
@@ -342,68 +298,87 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
+    final firestoreService = FirestoreService();
 
-    double totalCals = 0;
-    double totalPro = 0;
-    double totalCarbs = 0;
-    double totalFat = 0;
+    return ValueListenableBuilder<List<DailyLog>>(
+      valueListenable: firestoreService.logsNotifier,
+      builder: (context, allLogs, _) {
+        final dayLogs = allLogs.where((l) => l.date == widget.dateKey).toList();
 
-    for (final log in widget.dayLogs) {
-      totalCals += log.macros.calories;
-      totalPro += log.macros.proteinG;
-      totalCarbs += log.macros.carbsG;
-      totalFat += log.macros.fatG;
-    }
+        dayLogs.sort(FirestoreService.compareLogsChronologically);
 
-    final Map<DayPhase, List<DailyLog>> phaseMap = {
-      DayPhase.morning: [],
-      DayPhase.afternoon: [],
-      DayPhase.evening: [],
-    };
+        return ValueListenableBuilder<UserProfile>(
+          valueListenable: firestoreService.profileNotifier,
+          builder: (context, profile, _) {
+            double totalCals = 0;
+            double totalPro = 0;
+            double totalCarbs = 0;
+            double totalFat = 0;
 
-    for (final log in widget.dayLogs) {
-      phaseMap[_getLogPhase(log)]!.add(log);
-    }
+            for (final log in dayLogs) {
+              totalCals += log.macros.calories;
+              totalPro += log.macros.proteinG;
+              totalCarbs += log.macros.carbsG;
+              totalFat += log.macros.fatG;
+            }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      children: [
-        _buildOverviewCard(
-          totalCals: totalCals,
-          totalPro: totalPro,
-          totalCarbs: totalCarbs,
-          totalFat: totalFat,
-        ),
-        const SizedBox(height: 18),
-        _buildSectionHeader(widget.dayLogs.length),
-        const SizedBox(height: 10),
+            final Map<DayPhase, List<DailyLog>> phaseMap = {
+              DayPhase.morning: [],
+              DayPhase.afternoon: [],
+              DayPhase.evening: [],
+            };
 
-        if (widget.dayLogs.isEmpty)
-          _buildEmptyState()
-        else ...[
-          if (phaseMap[DayPhase.morning]!.isNotEmpty)
-            _buildPhaseSection(DayPhase.morning, phaseMap[DayPhase.morning]!),
-          if (phaseMap[DayPhase.afternoon]!.isNotEmpty)
-            _buildPhaseSection(DayPhase.afternoon, phaseMap[DayPhase.afternoon]!),
-          if (phaseMap[DayPhase.evening]!.isNotEmpty)
-            _buildPhaseSection(DayPhase.evening, phaseMap[DayPhase.evening]!),
-        ],
-      ],
+            for (final log in dayLogs) {
+              phaseMap[_getLogPhase(log)]!.add(log);
+            }
+
+            for (final phase in phaseMap.keys) {
+              phaseMap[phase]!.sort(FirestoreService.compareLogsChronologically);
+            }
+
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              children: [
+                _buildOverviewCard(
+                  profile: profile,
+                  totalCals: totalCals,
+                  totalPro: totalPro,
+                  totalCarbs: totalCarbs,
+                  totalFat: totalFat,
+                ),
+                const SizedBox(height: 18),
+                _buildSectionHeader(dayLogs.length),
+                const SizedBox(height: 10),
+
+                if (dayLogs.isEmpty)
+                  _buildEmptyState()
+                else ...[
+                  if (phaseMap[DayPhase.morning]!.isNotEmpty)
+                    _buildPhaseSection(DayPhase.morning, phaseMap[DayPhase.morning]!),
+                  if (phaseMap[DayPhase.afternoon]!.isNotEmpty)
+                    _buildPhaseSection(DayPhase.afternoon, phaseMap[DayPhase.afternoon]!),
+                  if (phaseMap[DayPhase.evening]!.isNotEmpty)
+                    _buildPhaseSection(DayPhase.evening, phaseMap[DayPhase.evening]!),
+                ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   Widget _buildOverviewCard({
+    required UserProfile profile,
     required double totalCals,
     required double totalPro,
     required double totalCarbs,
     required double totalFat,
   }) {
-    final dateKey = DateFormat('yyyy-MM-dd').format(widget.pageDate);
-    final dayTarget = widget.profile.getTargetForDate(dateKey);
+    final dayTarget = profile.getTargetForDate(widget.dateKey);
 
     final targetCals = dayTarget.targetCalories > 0 ? dayTarget.targetCalories : 2000.0;
     final targetPro = dayTarget.targetProteinG > 0 ? dayTarget.targetProteinG : 150.0;
@@ -773,8 +748,10 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
       } catch (_) {}
     }
 
+    final uniqueKey = ValueKey('log_card_${log.id.isNotEmpty ? log.id : log.loggedAt}_${log.date}');
+
     return Dismissible(
-      key: Key(log.id),
+      key: uniqueKey,
       direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
@@ -782,12 +759,14 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
           widget.onNavigateToLogWithDate(widget.pageDate, editLog: log);
           return false;
         } else {
-          return await _showDeleteConfirmation(log);
+          final confirmed = await _showDeleteConfirmation(log);
+          return confirmed == true;
         }
       },
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
-          FirestoreService().deleteLog(log.id);
+          HapticFeedback.mediumImpact();
+          FirestoreService().deleteLog(log.id, date: log.date);
         }
       },
       background: Container(
@@ -1061,6 +1040,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> with AutomaticKeep
     HapticFeedback.mediumImpact();
     return showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(
