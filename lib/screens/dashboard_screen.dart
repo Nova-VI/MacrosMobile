@@ -88,8 +88,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _goToPageOffset(int offset) {
     HapticFeedback.selectionClick();
+    final targetPage = _pageController.page!.round() + offset;
+    final targetDate = _getDateForPage(targetPage);
+    final monthKey = DateFormat('yyyy-MM').format(targetDate);
+    
+    // On-Demand Month Subscription
+    FirestoreService().ensureMonthSubscribed(monthKey);
+
     _pageController.animateToPage(
-      _pageController.page!.round() + offset,
+      targetPage,
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOutCubic,
     );
@@ -117,6 +124,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (picked != null) {
+      final monthKey = DateFormat('yyyy-MM').format(picked);
+      
+      // On-Demand Month Subscription
+      FirestoreService().ensureMonthSubscribed(monthKey);
+
       final targetPage = _getPageForDate(picked);
       _pageController.animateToPage(
         targetPage,
@@ -210,7 +222,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       return null;
                     },
                     onPageChanged: (pageIndex) {
-                      _selectedDateNotifier.value = _getDateForPage(pageIndex);
+                      final pageDate = _getDateForPage(pageIndex);
+                      final monthKey = DateFormat('yyyy-MM').format(pageDate);
+                      
+                      // On-Demand Month Subscription when swiping between days
+                      FirestoreService().ensureMonthSubscribed(monthKey);
+                      _selectedDateNotifier.value = pageDate;
                     },
                     itemBuilder: (context, pageIndex) {
                       final pageDate = _getDateForPage(pageIndex);

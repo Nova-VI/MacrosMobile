@@ -79,7 +79,16 @@ class FoodItem {
     this.ingredients = const [],
   });
 
-  factory FoodItem.fromFirestore(String id, Map<String, dynamic> data) {
+factory FoodItem.fromFirestore(String id, Map<String, dynamic>? data) {
+    if (data == null || data['_deleted'] == true) {
+      return FoodItem(
+        id: id,
+        name: '',
+        macros: const MacroNutrients(),
+        micros: const MicroNutrients(),
+      );
+    }
+
     final rawIngredients = data['ingredients'] as List<dynamic>? ?? [];
     return FoodItem(
       id: id,
@@ -92,8 +101,8 @@ class FoodItem {
       servingName: data['serving_name'] ?? '',
       emoji: data['emoji'] ?? '🍽️',
       isFavorite: data['is_favorite'] == true,
-      macros: MacroNutrients.fromMap(data['macros']),
-      micros: MicroNutrients.fromMap(data['micros']),
+      macros: MacroNutrients.fromMap(data['macros'] as Map<String, dynamic>?),
+      micros: MicroNutrients.fromMap(data['micros'] as Map<String, dynamic>?),
       ingredients: rawIngredients
           .map((item) => RecipeIngredient.fromMap(Map<String, dynamic>.from(item)))
           .toList(),

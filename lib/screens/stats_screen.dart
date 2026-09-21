@@ -26,6 +26,21 @@ class _StatsScreenState extends State<StatsScreen> {
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
+  void _onRangeChanged(String rangeKey) {
+    final now = DateTime.now();
+    if (rangeKey == 'all') {
+      _firestoreService.ensureAllMonthsLoaded();
+    } else if (rangeKey == '90') {
+      for (int i = 0; i < 4; i++) {
+        final d = DateTime(now.year, now.month - i, 1);
+        _firestoreService.ensureMonthSubscribed(DateFormat('yyyy-MM').format(d));
+      }
+    } else if (rangeKey == '30' || rangeKey == '7') {
+      _firestoreService.ensureMonthSubscribed(DateFormat('yyyy-MM').format(now));
+      _firestoreService.ensureMonthSubscribed(DateFormat('yyyy-MM').format(DateTime(now.year, now.month - 1, 1)));
+    }
+  }
+
   Future<void> _pickCustomRange() async {
     HapticFeedback.lightImpact();
     final picked = await showDateRangePicker(
@@ -58,6 +73,13 @@ class _StatsScreenState extends State<StatsScreen> {
         _customStartDate = picked.start;
         _customEndDate = picked.end;
       });
+
+      // Subscribe to all months in custom range
+      DateTime cursor = picked.start;
+      while (!cursor.isAfter(picked.end)) {
+        _firestoreService.ensureMonthSubscribed(DateFormat('yyyy-MM').format(cursor));
+        cursor = DateTime(cursor.year, cursor.month + 1, 1);
+      }
     }
   }
 
@@ -80,9 +102,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     _buildRangeFilterRow(),
                     const SizedBox(height: 14),
 
-                    // On-Demand Review Card if a check-in is pending or was dismissed
                     _buildDismissedCheckInCard(),
-
                     _buildAdherenceBanner(statsData, profile),
                     const SizedBox(height: 14),
                     _buildMetaCard(statsData),
@@ -205,6 +225,7 @@ class _StatsScreenState extends State<StatsScreen> {
           onTap();
         } else {
           setState(() => _currentRange = rangeKey);
+          _onRangeChanged(rangeKey);
         }
       },
       borderRadius: BorderRadius.circular(14),

@@ -29,7 +29,18 @@ class DailyLog {
     required this.micros,
   });
 
-  factory DailyLog.fromFirestore(String id, Map<String, dynamic> data) {
+factory DailyLog.fromFirestore(String id, Map<String, dynamic>? data) {
+    if (data == null || data['_deleted'] == true) {
+      return DailyLog(
+        id: id,
+        date: '',
+        loggedAt: '',
+        foodName: '',
+        macros: const MacroNutrients(),
+        micros: const MicroNutrients(),
+      );
+    }
+
     return DailyLog(
       id: id,
       date: data['date'] ?? '',
@@ -41,8 +52,8 @@ class DailyLog {
       emoji: data['emoji'] ?? '🍽️',
       servings: (data['servings'] as num?)?.toDouble() ?? 1.0,
       servingSizeG: (data['serving_size_g'] as num?)?.toDouble() ?? 100.0,
-      macros: MacroNutrients.fromMap(data['macros']),
-      micros: MicroNutrients.fromMap(data['micros']),
+      macros: MacroNutrients.fromMap(data['macros'] as Map<String, dynamic>?),
+      micros: MicroNutrients.fromMap(data['micros'] as Map<String, dynamic>?),
     );
   }
 

@@ -19,14 +19,18 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Observable ValueNotifiers for Flutter UI (0ms instant reactivity)
   final ValueNotifier<List<DailyLog>> logsNotifier = ValueNotifier([]);
   final ValueNotifier<List<FoodItem>> foodsNotifier = ValueNotifier([]);
   final ValueNotifier<List<WeightLog>> weightLogsNotifier = ValueNotifier([]);
   final ValueNotifier<UserProfile> profileNotifier = ValueNotifier(UserProfile());
 
-  final List<StreamSubscription> _subscriptions = [];
-  int _lastSyncTimestamp = 0;
-  bool _isReady = false;
+  // In-memory bucket stores
+  final Map<String, Map<String, dynamic>> _monthCache = {}; // "YYYY-MM" -> raw month doc data
+  final Map<String, double> _weightCache = {};              // "YYYY-MM-DD" -> weight_kg
+  final Map<String, FoodItem> _foodCache = {};              // food_id -> FoodItem
+
+  final Map<String, StreamSubscription> _subscriptions = {};
 
   String? get currentUid => _auth.currentUser?.uid;
 
@@ -36,189 +40,130 @@ class FirestoreService {
     return uid;
   }
 
-  Future<void> _touchSyncMeta(String uid) async {
-    try {
-      await _db.collection('users').doc(uid).collection('meta').doc('sync').set({
-        'last_modified': DateTime.now().millisecondsSinceEpoch,
-      }, SetOptions(merge: true));
-    } catch (_) {}
-  }
-
-  Future<bool> _hydrateFromLocalDiskCache(String uid) async {
-    try {
-      final foodsSnap = await _db.collection('users').doc(uid).collection('foods').get(const GetOptions(source: Source.cache));
-      final logsSnap = await _db.collection('users').doc(uid).collection('logs').get(const GetOptions(source: Source.cache));
-      final weightSnap = await _db.collection('users').doc(uid).collection('weight_logs').get(const GetOptions(source: Source.cache));
-      final profileSnap = await _db.collection('users').doc(uid).collection('profile').doc('1').get(const GetOptions(source: Source.cache));
-
-      if (foodsSnap.docs.isNotEmpty || logsSnap.docs.isNotEmpty || weightSnap.docs.isNotEmpty) {
-        foodsNotifier.value = foodsSnap.docs
-            .where((d) => d.data()['_deleted'] != true)
-            .map((doc) => FoodItem.fromFirestore(doc.id, doc.data()))
-            .toList();
-
-        final logs = logsSnap.docs
-            .where((d) => d.data()['_deleted'] != true)
-            .map((doc) => DailyLog.fromFirestore(doc.id, doc.data()))
-            .toList();
-        logs.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
-        logsNotifier.value = logs;
-
-        final weights = weightSnap.docs
-            .where((d) => d.data()['_deleted'] != true)
-            .map((doc) => WeightLog.fromFirestore(doc.data()))
-            .toList();
-        weights.sort((a, b) => a.date.compareTo(b.date));
-        weightLogsNotifier.value = weights;
-
-        if (profileSnap.exists && profileSnap.data() != null) {
-          profileNotifier.value = UserProfile.fromFirestore(profileSnap.data());
-        }
-
-        _isReady = true;
-        AdaptiveCoachService().recomputeAndEvaluate();
-        return true;
-      }
-    } catch (_) {}
-    return false;
-  }
-
-  Future<void> _performInitialColdLoad(String uid) async {
-    try {
-      final foodsSnap = await _db.collection('users').doc(uid).collection('foods').get();
-      final logsSnap = await _db.collection('users').doc(uid).collection('logs').get();
-      final weightSnap = await _db.collection('users').doc(uid).collection('weight_logs').get();
-      final profileSnap = await _db.collection('users').doc(uid).collection('profile').doc('1').get();
-
-      foodsNotifier.value = foodsSnap.docs
-          .where((d) => d.data()['_deleted'] != true)
-          .map((doc) => FoodItem.fromFirestore(doc.id, doc.data()))
-          .toList();
-
-      final logs = logsSnap.docs
-          .where((d) => d.data()['_deleted'] != true)
-          .map((doc) => DailyLog.fromFirestore(doc.id, doc.data()))
-          .toList();
-      logs.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
-      logsNotifier.value = logs;
-
-      final weights = weightSnap.docs
-          .where((d) => d.data()['_deleted'] != true)
-          .map((doc) => WeightLog.fromFirestore(doc.data()))
-          .toList();
-      weights.sort((a, b) => a.date.compareTo(b.date));
-      weightLogsNotifier.value = weights;
-
-      if (profileSnap.exists && profileSnap.data() != null) {
-        profileNotifier.value = UserProfile.fromFirestore(profileSnap.data());
-      }
-
-      _lastSyncTimestamp = DateTime.now().millisecondsSinceEpoch;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_sync_timestamp_$uid', _lastSyncTimestamp);
-      
-      _isReady = true;
-      AdaptiveCoachService().recomputeAndEvaluate();
-    } catch (_) {}
-  }
-
-  Future<void> _syncDeltaChanges(String uid, int remoteLastModified) async {
-    try {
-      // 1. Foods Delta
-      final foodsDelta = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('foods')
-          .where('updated_at', isGreaterThan: _lastSyncTimestamp)
-          .get();
-
-      if (foodsDelta.docs.isNotEmpty) {
-        final current = Map<String, FoodItem>.fromEntries(foodsNotifier.value.map((f) => MapEntry(f.id, f)));
-        for (final doc in foodsDelta.docs) {
-          final data = doc.data();
-          if (data['_deleted'] == true) {
-            current.remove(doc.id);
-          } else {
-            current[doc.id] = FoodItem.fromFirestore(doc.id, data);
+  // --- Flattening Helpers for UI Streams ---
+  void _rebuildFlatLogs() {
+    final List<DailyLog> allLogs = [];
+    for (final monthData in _monthCache.values) {
+      final daysMap = monthData['days'] as Map<String, dynamic>? ?? {};
+      for (final dayList in daysMap.values) {
+        if (dayList is List) {
+          for (final rawItem in dayList) {
+            if (rawItem is Map) {
+              final map = Map<String, dynamic>.from(rawItem);
+              final id = map['id']?.toString() ?? '';
+              allLogs.add(DailyLog.fromFirestore(id, map));
+            }
           }
         }
-        foodsNotifier.value = current.values.toList();
       }
+    }
+    allLogs.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
+    logsNotifier.value = allLogs;
+    AdaptiveCoachService().recomputeAndEvaluate();
+  }
 
-      // 2. Logs Delta
-      final logsDelta = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('logs')
-          .where('updated_at', isGreaterThan: _lastSyncTimestamp)
-          .get();
+  void _rebuildFlatWeights() {
+    final List<WeightLog> allWeights = _weightCache.entries.map((e) {
+      return WeightLog(date: e.key, weightKg: e.value);
+    }).toList();
+    allWeights.sort((a, b) => a.date.compareTo(b.date));
+    weightLogsNotifier.value = allWeights;
+    AdaptiveCoachService().recomputeAndEvaluate();
+  }
 
-      if (logsDelta.docs.isNotEmpty) {
-        final current = Map<String, DailyLog>.fromEntries(logsNotifier.value.map((l) => MapEntry(l.id, l)));
-        for (final doc in logsDelta.docs) {
-          final data = doc.data();
-          if (data['_deleted'] == true) {
-            current.remove(doc.id);
-          } else {
-            current[doc.id] = DailyLog.fromFirestore(doc.id, data);
-          }
-        }
-        final list = current.values.toList()..sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
-        logsNotifier.value = list;
+  void _rebuildFlatFoods() {
+    foodsNotifier.value = _foodCache.values.toList();
+  }
+
+  // --- Dynamic On-Demand Subscriptions ---
+  void ensureMonthSubscribed(String monthKey) {
+    if (currentUid == null || monthKey.isEmpty) return;
+    final listenerKey = 'month_$monthKey';
+    if (_subscriptions.containsKey(listenerKey)) return;
+
+    final docRef = _db.collection('users').doc(_uid).collection('logs').doc(monthKey);
+    final sub = docRef.snapshots().listen((snap) {
+      if (snap.exists && snap.data() != null) {
+        _monthCache[monthKey] = snap.data()!;
+        _rebuildFlatLogs();
       }
+    });
 
-      // 3. Weight Logs Delta
-      final weightDelta = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('weight_logs')
-          .where('updated_at', isGreaterThan: _lastSyncTimestamp)
-          .get();
+    _subscriptions[listenerKey] = sub;
+  }
 
-      if (weightDelta.docs.isNotEmpty) {
-        final current = Map<String, WeightLog>.fromEntries(weightLogsNotifier.value.map((w) => MapEntry(w.date, w)));
-        for (final doc in weightDelta.docs) {
-          final data = doc.data();
-          if (data['_deleted'] == true) {
-            current.remove(doc.id);
-          } else {
-            current[doc.id] = WeightLog.fromFirestore(data);
-          }
-        }
-        final list = current.values.toList()..sort((a, b) => a.date.compareTo(b.date));
-        weightLogsNotifier.value = list;
-      }
-
-      // 4. Profile Delta
-      final profileSnap = await _db.collection('users').doc(uid).collection('profile').doc('1').get();
-      if (profileSnap.exists && profileSnap.data() != null) {
-        final data = profileSnap.data()!;
-        final updated = (data['updated_at'] as num?)?.toInt() ?? 0;
-        if (updated > _lastSyncTimestamp) {
-          profileNotifier.value = UserProfile.fromFirestore(data);
+  Future<void> ensureAllMonthsLoaded() async {
+    if (currentUid == null) return;
+    try {
+      final snap = await _db.collection('users').doc(_uid).collection('logs').get();
+      for (final doc in snap.docs) {
+        if (RegExp(r'^\d{4}-\d{2}$').hasMatch(doc.id)) {
+          _monthCache[doc.id] = doc.data();
+          ensureMonthSubscribed(doc.id);
         }
       }
-
-      _lastSyncTimestamp = remoteLastModified;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_sync_timestamp_$uid', _lastSyncTimestamp);
-      AdaptiveCoachService().recomputeAndEvaluate();
+      _rebuildFlatLogs();
     } catch (_) {}
   }
 
-  void initializeListeners(String uid) async {
+  // --- Initial Device Hydration (First Login on this device) ---
+  Future<void> _hydrateNewDevice(String uid) async {
+    final prefs = await SharedPreferences.getInstance();
+    final hydrationKey = 'hydrated_v2_$uid';
+    final alreadyHydrated = prefs.getBool(hydrationKey) ?? false;
+
+    if (!alreadyHydrated) {
+      try {
+        final logsSnap = await _db.collection('users').doc(uid).collection('logs').get();
+        final weightSnap = await _db.collection('users').doc(uid).collection('weight_logs').doc('all').get();
+        final foodSnap = await _db.collection('users').doc(uid).collection('foods').doc('library').get();
+
+        for (final doc in logsSnap.docs) {
+          if (RegExp(r'^\d{4}-\d{2}$').hasMatch(doc.id)) {
+            _monthCache[doc.id] = doc.data();
+          }
+        }
+
+        if (weightSnap.exists && weightSnap.data() != null) {
+          final entries = weightSnap.data()!['entries'] as Map<String, dynamic>? ?? {};
+          entries.forEach((date, weight) {
+            final w = (weight as num?)?.toDouble();
+            if (w != null) _weightCache[date] = w;
+          });
+        }
+
+        if (foodSnap.exists && foodSnap.data() != null) {
+          final items = foodSnap.data()!['items'] as Map<String, dynamic>? ?? {};
+          items.forEach((id, rawFood) {
+            if (rawFood is Map) {
+              _foodCache[id] = FoodItem.fromFirestore(id, Map<String, dynamic>.from(rawFood));
+            }
+          });
+        }
+
+        await prefs.setBool(hydrationKey, true);
+        _rebuildFlatLogs();
+        _rebuildFlatWeights();
+        _rebuildFlatFoods();
+      } catch (_) {}
+    }
+  }
+
+  // --- Realtime Listeners Initialization ---
+  void initializeListeners(String uid) {
     cancelListeners();
 
-    final prefs = await SharedPreferences.getInstance();
-    _lastSyncTimestamp = prefs.getInt('last_sync_timestamp_$uid') ?? 0;
+    // 1. Initial Device Hydration
+    _hydrateNewDevice(uid);
 
-    // 1. User document stream
+    // 2. User Document Stream
     final userSub = _db.collection('users').doc(uid).snapshots().listen((doc) async {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         final remoteName = data['displayName']?.toString() ?? '';
         final remoteCompleted = data['onboarding_completed'] == true;
 
+        final prefs = await SharedPreferences.getInstance();
         final cachedName = prefs.getString('cached_user_name_$uid') ?? '';
         final cachedCompleted = prefs.getBool('onboarding_completed_$uid');
 
@@ -233,50 +178,75 @@ class FirestoreService {
         }
       }
     });
-    _subscriptions.add(userSub);
+    _subscriptions['user'] = userSub;
 
-    // 2. Single Watchdog Pointer Stream
-    final syncSub = _db.collection('users').doc(uid).collection('meta').doc('sync').snapshots().listen((snap) async {
-      if (!snap.exists) {
-        await _touchSyncMeta(uid);
-        if (!_isReady) {
-          final hydrated = await _hydrateFromLocalDiskCache(uid);
-          if (!hydrated) await _performInitialColdLoad(uid);
-        }
-        return;
-      }
+    // 3. Continuous 2-Month Active Watch (Current + Previous Month)
+    final now = DateTime.now();
+    final currentMonthKey = DateFormat('yyyy-MM').format(now);
+    final prevMonthDate = DateTime(now.year, now.month - 1, 1);
+    final prevMonthKey = DateFormat('yyyy-MM').format(prevMonthDate);
 
-      final remoteLastModified = (snap.data()?['last_modified'] as num?)?.toInt() ?? 0;
+    ensureMonthSubscribed(currentMonthKey);
+    ensureMonthSubscribed(prevMonthKey);
 
-      if (!_isReady || _lastSyncTimestamp == 0) {
-        final hydrated = await _hydrateFromLocalDiskCache(uid);
-        if (!hydrated || _lastSyncTimestamp == 0) {
-          await _performInitialColdLoad(uid);
-          return;
-        }
-      }
-
-      if (remoteLastModified > _lastSyncTimestamp) {
-        await _syncDeltaChanges(uid, remoteLastModified);
+    // 4. Single Lifetime Weight Document Stream (1 read)
+    final weightSub = _db.collection('users').doc(uid).collection('weight_logs').doc('all').snapshots().listen((snap) {
+      if (snap.exists && snap.data() != null) {
+        final entries = snap.data()!['entries'] as Map<String, dynamic>? ?? {};
+        _weightCache.clear();
+        entries.forEach((date, weight) {
+          final w = (weight as num?)?.toDouble();
+          if (w != null) _weightCache[date] = w;
+        });
+        _rebuildFlatWeights();
       }
     });
-    _subscriptions.add(syncSub);
+    _subscriptions['weights'] = weightSub;
+
+    // 5. Food Library Single-Doc Stream (1 read)
+    final foodSub = _db.collection('users').doc(uid).collection('foods').doc('library').snapshots().listen((snap) {
+      if (snap.exists && snap.data() != null) {
+        final items = snap.data()!['items'] as Map<String, dynamic>? ?? {};
+        _foodCache.clear();
+        items.forEach((id, rawFood) {
+          if (rawFood is Map) {
+            _foodCache[id] = FoodItem.fromFirestore(id, Map<String, dynamic>.from(rawFood));
+          }
+        });
+        _rebuildFlatFoods();
+      }
+    });
+    _subscriptions['foods'] = foodSub;
+
+    // 6. Profile Stream (1 read)
+    final profileSub = _db.collection('users').doc(uid).collection('profile').doc('1').snapshots().listen((doc) {
+      if (doc.exists && doc.data() != null) {
+        profileNotifier.value = UserProfile.fromFirestore(doc.data());
+        AdaptiveCoachService().recomputeAndEvaluate();
+      }
+    });
+    _subscriptions['profile'] = profileSub;
   }
 
   void cancelListeners() {
-    for (final sub in _subscriptions) {
+    for (final sub in _subscriptions.values) {
       sub.cancel();
     }
     _subscriptions.clear();
+
+    _monthCache.clear();
+    _weightCache.clear();
+    _foodCache.clear();
 
     logsNotifier.value = [];
     foodsNotifier.value = [];
     weightLogsNotifier.value = [];
     profileNotifier.value = UserProfile();
-    _isReady = false;
   }
 
   List<DailyLog> getLogsForDate(String date) {
+    final monthKey = date.length >= 7 ? date.substring(0, 7) : '';
+    if (monthKey.isNotEmpty) ensureMonthSubscribed(monthKey);
     return logsNotifier.value.where((log) => log.date == date).toList();
   }
 
@@ -298,10 +268,9 @@ class FirestoreService {
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
 
-  // --- CRUD Operations ---
-
+  // --- CRUD: Food Logs (Routes to Month Buckets) ---
   Future<String> addLog(DailyLog log) async {
-    final String id = log.id.isNotEmpty ? log.id : _db.collection('users').doc(_uid).collection('logs').doc().id;
+    final String id = log.id.isNotEmpty ? log.id : 'log_${DateTime.now().millisecondsSinceEpoch}';
     final resolvedLog = DailyLog(
       id: id,
       date: log.date,
@@ -317,47 +286,127 @@ class FirestoreService {
       micros: log.micros,
     );
 
-    final current = List<DailyLog>.from(logsNotifier.value)
-      ..removeWhere((l) => l.id == id)
-      ..add(resolvedLog);
-    current.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
-    logsNotifier.value = current;
+    final monthKey = log.date.substring(0, 7);
+    final dateKey = log.date;
 
-    final map = resolvedLog.toMap()..['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    _db.collection('users').doc(_uid).collection('logs').doc(id).set(map);
-    _touchSyncMeta(_uid);
+    // 1. Optimistic Local Update
+    if (!_monthCache.containsKey(monthKey)) {
+      _monthCache[monthKey] = {'month': monthKey, 'days': {}};
+    }
+    final daysMap = _monthCache[monthKey]!['days'] as Map<String, dynamic>;
+    final List<dynamic> dayList = List.from(daysMap[dateKey] as List<dynamic>? ?? []);
+    dayList.add(resolvedLog.toMap());
+    daysMap[dateKey] = dayList;
+
+    _rebuildFlatLogs();
+
+    // 2. Cloud Month Bucket Write
+    _db.collection('users').doc(_uid).collection('logs').doc(monthKey).set({
+      'month': monthKey,
+      'days': {
+        dateKey: dayList,
+      }
+    }, SetOptions(merge: true));
+
     return id;
   }
 
   Future<void> updateLog(String id, Map<String, dynamic> changes) async {
-    final current = List<DailyLog>.from(logsNotifier.value);
-    final idx = current.indexWhere((l) => l.id == id);
-    if (idx != -1) {
-      final old = current[idx];
-      final map = old.toMap()..addAll(changes);
-      current[idx] = DailyLog.fromFirestore(id, map);
-      current.sort((a, b) => a.loggedAt.compareTo(b.loggedAt));
-      logsNotifier.value = current;
+    String? foundMonthKey;
+    String? foundDateKey;
+    List<dynamic>? targetList;
+
+    for (final entry in _monthCache.entries) {
+      final daysMap = entry.value['days'] as Map<String, dynamic>? ?? {};
+      for (final dayEntry in daysMap.entries) {
+        final list = List.from(dayEntry.value as List<dynamic>? ?? []);
+        final idx = list.indexWhere((item) => item is Map && item['id'] == id);
+        if (idx != -1) {
+          final oldItem = Map<String, dynamic>.from(list[idx] as Map);
+          oldItem.addAll(changes);
+          list[idx] = oldItem;
+          daysMap[dayEntry.key] = list;
+
+          foundMonthKey = entry.key;
+          foundDateKey = dayEntry.key;
+          targetList = list;
+          break;
+        }
+      }
+      if (foundMonthKey != null) break;
     }
 
-    final map = Map<String, dynamic>.from(changes)..['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    _db.collection('users').doc(_uid).collection('logs').doc(id).update(map);
-    _touchSyncMeta(_uid);
+    if (foundMonthKey != null && foundDateKey != null && targetList != null) {
+      _rebuildFlatLogs();
+      _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
+        'days': {
+          foundDateKey: targetList,
+        }
+      }, SetOptions(merge: true));
+    }
   }
 
   Future<void> deleteLog(String id) async {
-    final current = List<DailyLog>.from(logsNotifier.value)..removeWhere((l) => l.id == id);
-    logsNotifier.value = current;
+    String? foundMonthKey;
+    String? foundDateKey;
+    List<dynamic>? targetList;
 
-    _db.collection('users').doc(_uid).collection('logs').doc(id).set({
-      '_deleted': true,
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    }, SetOptions(merge: true));
-    _touchSyncMeta(_uid);
+    for (final entry in _monthCache.entries) {
+      final daysMap = entry.value['days'] as Map<String, dynamic>? ?? {};
+      for (final dayEntry in daysMap.entries) {
+        final list = List.from(dayEntry.value as List<dynamic>? ?? []);
+        final idx = list.indexWhere((item) => item is Map && item['id'] == id);
+        if (idx != -1) {
+          list.removeAt(idx);
+          daysMap[dayEntry.key] = list;
+
+          foundMonthKey = entry.key;
+          foundDateKey = dayEntry.key;
+          targetList = list;
+          break;
+        }
+      }
+      if (foundMonthKey != null) break;
+    }
+
+    if (foundMonthKey != null && foundDateKey != null && targetList != null) {
+      _rebuildFlatLogs();
+      _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
+        'days': {
+          foundDateKey: targetList,
+        }
+      }, SetOptions(merge: true));
+    }
   }
 
+  // --- CRUD: Weight Tracker (Routes to weight_logs/all) ---
+  Future<void> setWeightLog(WeightLog log) async {
+    _weightCache[log.date] = log.weightKg;
+    _rebuildFlatWeights();
+
+    _db.collection('users').doc(_uid).collection('weight_logs').doc('all').set({
+      'entries': {
+        log.date: log.weightKg,
+      }
+    }, SetOptions(merge: true));
+
+    _db.collection('users').doc(_uid).collection('profile').doc('1').set({
+      'weight': log.weightKg,
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteWeightLog(String date) async {
+    _weightCache.remove(date);
+    _rebuildFlatWeights();
+
+    _db.collection('users').doc(_uid).collection('weight_logs').doc('all').update({
+      'entries.$date': FieldValue.delete(),
+    });
+  }
+
+  // --- CRUD: Food Library (Routes to foods/library) ---
   Future<String> addFood(FoodItem food) async {
-    final String id = food.id.isNotEmpty ? food.id : _db.collection('users').doc(_uid).collection('foods').doc().id;
+    final String id = food.id.isNotEmpty ? food.id : 'food_${DateTime.now().millisecondsSinceEpoch}';
     final resolvedFood = FoodItem(
       id: id,
       name: food.name,
@@ -374,72 +423,44 @@ class FirestoreService {
       ingredients: food.ingredients,
     );
 
-    final current = List<FoodItem>.from(foodsNotifier.value)
-      ..removeWhere((f) => f.id == id)
-      ..add(resolvedFood);
-    foodsNotifier.value = current;
+    _foodCache[id] = resolvedFood;
+    _rebuildFlatFoods();
 
-    final map = resolvedFood.toMap()..['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    _db.collection('users').doc(_uid).collection('foods').doc(id).set(map);
-    _touchSyncMeta(_uid);
+    _db.collection('users').doc(_uid).collection('foods').doc('library').set({
+      'items': {
+        id: resolvedFood.toMap(),
+      }
+    }, SetOptions(merge: true));
+
     return id;
   }
 
   Future<void> updateFood(String id, Map<String, dynamic> changes) async {
-    final current = List<FoodItem>.from(foodsNotifier.value);
-    final idx = current.indexWhere((f) => f.id == id);
-    if (idx != -1) {
-      final old = current[idx];
-      final map = old.toMap()..addAll(changes);
-      current[idx] = FoodItem.fromFirestore(id, map);
-      foodsNotifier.value = current;
-    }
+    final existing = _foodCache[id];
+    if (existing != null) {
+      final map = existing.toMap()..addAll(changes);
+      final updated = FoodItem.fromFirestore(id, map);
+      _foodCache[id] = updated;
+      _rebuildFlatFoods();
 
-    final map = Map<String, dynamic>.from(changes)..['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    _db.collection('users').doc(_uid).collection('foods').doc(id).update(map);
-    _touchSyncMeta(_uid);
+      _db.collection('users').doc(_uid).collection('foods').doc('library').set({
+        'items': {
+          id: updated.toMap(),
+        }
+      }, SetOptions(merge: true));
+    }
   }
 
   Future<void> deleteFood(String id) async {
-    final current = List<FoodItem>.from(foodsNotifier.value)..removeWhere((f) => f.id == id);
-    foodsNotifier.value = current;
+    _foodCache.remove(id);
+    _rebuildFlatFoods();
 
-    _db.collection('users').doc(_uid).collection('foods').doc(id).set({
-      '_deleted': true,
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    }, SetOptions(merge: true));
-    _touchSyncMeta(_uid);
+    _db.collection('users').doc(_uid).collection('foods').doc('library').update({
+      'items.$id': FieldValue.delete(),
+    });
   }
 
-  Future<void> setWeightLog(WeightLog log) async {
-    final current = List<WeightLog>.from(weightLogsNotifier.value)
-      ..removeWhere((w) => w.date == log.date)
-      ..add(log);
-    current.sort((a, b) => a.date.compareTo(b.date));
-    weightLogsNotifier.value = current;
-
-    final map = log.toMap()..['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    _db.collection('users').doc(_uid).collection('weight_logs').doc(log.date).set(map, SetOptions(merge: true));
-
-    _db.collection('users').doc(_uid).collection('profile').doc('1').set({
-      'weight': log.weightKg,
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    }, SetOptions(merge: true));
-
-    _touchSyncMeta(_uid);
-  }
-
-  Future<void> deleteWeightLog(String date) async {
-    final current = List<WeightLog>.from(weightLogsNotifier.value)..removeWhere((w) => w.date == date);
-    weightLogsNotifier.value = current;
-
-    _db.collection('users').doc(_uid).collection('weight_logs').doc(date).set({
-      '_deleted': true,
-      'updated_at': DateTime.now().millisecondsSinceEpoch,
-    }, SetOptions(merge: true));
-    _touchSyncMeta(_uid);
-  }
-
+  // --- User Profile ---
   Future<void> saveProfile(UserProfile profile) async {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final currentProfile = profileNotifier.value;
@@ -504,8 +525,9 @@ class FirestoreService {
 
     profileNotifier.value = updatedProfile;
 
-    final map = updatedProfile.toMap()..['updated_at'] = DateTime.now().millisecondsSinceEpoch;
-    _db.collection('users').doc(_uid).collection('profile').doc('1').set(map, SetOptions(merge: true));
-    _touchSyncMeta(_uid);
+    _db.collection('users').doc(_uid).collection('profile').doc('1').set(
+      updatedProfile.toMap(),
+      SetOptions(merge: true),
+    );
   }
 }
