@@ -162,6 +162,7 @@ class AdaptiveCoachService {
       latestState: currentState,
       dailyCaloriesMap: dailyCaloriesMap,
       dailyWeightsMap: dailyWeightsMap,
+      computedTrendWeights: computedTrendWeights,
     );
   }
 
@@ -170,6 +171,7 @@ class AdaptiveCoachService {
     required AdaptiveCoachState latestState,
     required Map<String, double> dailyCaloriesMap,
     required Map<String, double> dailyWeightsMap,
+    required Map<String, double> computedTrendWeights,
   }) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -217,9 +219,34 @@ class AdaptiveCoachService {
     final weeklyKgDelta = (goalOffset * 7.0) / 7700.0;
     final proteinMultiplier = double.tryParse(profile.proteinMultiplier) ?? 2.0;
 
-    final initialPhaseMass = activePhase != null
-        ? (activePhase.initialCalories > 0 ? latestState.estimatedMassKg : profile.weight)
-        : profile.weight;
+    // Fix: Resolve true historical starting weight at the phase start date
+    double initialPhaseMass = profile.weight;
+    if (activePhase != null) {
+      final phaseStartDateKey = activePhase.startDate;
+      if (dailyWeightsMap.containsKey(phaseStartDateKey)) {
+        initialPhaseMass = dailyWeightsMap[phaseStartDateKey]!;
+      } else if (computedTrendWeights.containsKey(phaseStartDateKey)) {
+        initialPhaseMass = computedTrendWeights[phaseStartDateKey]!;
+      } else {
+        // Fallback: look for the closest recorded weight on or prior to phase start
+        final sortedDates = dailyWeightsMap.keys.toList()..sort();
+        String? closestDate;
+        for (final d in sortedDates) {
+          if (d.compareTo(phaseStartDateKey) <= 0) {
+            closestDate = d;
+          } else {
+            break;
+          }
+        }
+        if (closestDate != null) {
+          initialPhaseMass = dailyWeightsMap[closestDate]!;
+        } else if (sortedDates.isNotEmpty) {
+          initialPhaseMass = dailyWeightsMap[sortedDates.first]!;
+        } else {
+          initialPhaseMass = profile.weight;
+        }
+      }
+    }
 
     final phaseDaysElapsed = activePhase != null
         ? today.difference(DateFormat('yyyy-MM-dd').parse(activePhase.startDate)).inDays
@@ -250,7 +277,6 @@ class AdaptiveCoachService {
       stateSnapshot: latestState,
     );
 
-    // Read the live synced date from local cache (kept 100% up-to-date by the Firestore config listener)
     final prefs = await SharedPreferences.getInstance();
     final dismissedDateStr = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
 
@@ -262,7 +288,6 @@ class AdaptiveCoachService {
       } catch (_) {}
     }
 
-    // Suppress active banner for 7 full days from dismissal
     if (daysSinceDismissal < 7) {
       checkInProposalNotifier.value = null;
       dismissedProposalNotifier.value = proposal;
@@ -344,7 +369,6 @@ class AdaptiveCoachService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('dismissed_checkin_date_$uid');
 
-      // Clear dismissal date from Firestore
       FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -369,7 +393,6 @@ class AdaptiveCoachService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('dismissed_checkin_date_$uid', proposal.date);
 
-      // Persist dismissal date to Firestore for seamless cross-device synchronization
       FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
