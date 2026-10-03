@@ -370,13 +370,38 @@ class FirestoreService {
     }
 
     if (foundMonthKey != null && updatedMap != null) {
-      _rebuildFlatLogs();
+      final newDate = updatedMap['date']?.toString() ?? '';
+      final newMonthKey = newDate.length >= 7 ? newDate.substring(0, 7) : foundMonthKey;
 
-      _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
-        'items': {
-          id: updatedMap,
-        },
-      }, SetOptions(merge: true));
+      if (newMonthKey != foundMonthKey) {
+        // Month changed: remove from old month, insert into new month
+        (_monthCache[foundMonthKey]?['items'] as Map?)?.remove(id);
+
+        if (!_monthCache.containsKey(newMonthKey)) {
+          _monthCache[newMonthKey] = {'month': newMonthKey, 'items': <String, dynamic>{}};
+        }
+        (_monthCache[newMonthKey]!['items'] as Map<String, dynamic>)[id] = updatedMap;
+
+        _rebuildFlatLogs();
+
+        _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).update({
+          FieldPath(['items', id]): FieldValue.delete(),
+        }).catchError((_) {});
+
+        _db.collection('users').doc(_uid).collection('logs').doc(newMonthKey).set({
+          'month': newMonthKey,
+          'items': {id: updatedMap},
+        }, SetOptions(merge: true)).catchError((_) {});
+      } else {
+        // Same month update
+        _rebuildFlatLogs();
+
+        _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
+          'items': {
+            id: updatedMap,
+          },
+        }, SetOptions(merge: true));
+      }
     }
   }
 
