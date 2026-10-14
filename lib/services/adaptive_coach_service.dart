@@ -60,6 +60,8 @@ class AdaptiveCoachService {
   }
 
   Future<void> recomputeAndEvaluate() async {
+    await _firestoreService.ensureAllMonthsLoaded();
+
     final profile = _firestoreService.profileNotifier.value;
     final allLogs = _firestoreService.logsNotifier.value;
     final allWeights = _firestoreService.weightLogsNotifier.value;

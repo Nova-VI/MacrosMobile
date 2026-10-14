@@ -32,6 +32,8 @@ class FirestoreService {
 
   final Map<String, StreamSubscription> _subscriptions = {};
 
+  bool _allMonthsLoadedThisSession = false;
+
   String? get currentUid => _auth.currentUser?.uid;
 
   String get _uid {
@@ -115,6 +117,7 @@ class FirestoreService {
 
   Future<void> ensureAllMonthsLoaded() async {
     if (currentUid == null) return;
+    if (_allMonthsLoadedThisSession) return;
     try {
       final snap = await _db.collection('users').doc(_uid).collection('logs').get();
       for (final doc in snap.docs) {
@@ -123,6 +126,7 @@ class FirestoreService {
           ensureMonthSubscribed(doc.id);
         }
       }
+      _allMonthsLoadedThisSession = true;
       _rebuildFlatLogs();
     } catch (_) {}
   }
@@ -252,7 +256,7 @@ class FirestoreService {
       if (snap.exists && snap.data() != null) {
         final data = snap.data()!;
         final remoteDismissedDate = data['dismissed_checkin_date']?.toString();
-        
+
         SharedPreferences.getInstance().then((prefs) {
           if (remoteDismissedDate != null && remoteDismissedDate.isNotEmpty) {
             prefs.setString('dismissed_checkin_date_$uid', remoteDismissedDate);
@@ -275,6 +279,7 @@ class FirestoreService {
     _monthCache.clear();
     _weightCache.clear();
     _foodCache.clear();
+    _allMonthsLoadedThisSession = false;
 
     logsNotifier.value = [];
     foodsNotifier.value = [];
