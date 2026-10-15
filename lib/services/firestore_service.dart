@@ -33,6 +33,11 @@ class FirestoreService {
   final Map<String, StreamSubscription> _subscriptions = {};
 
   bool _allMonthsLoadedThisSession = false;
+  String? _listeningUid;
+  int _listenerGeneration = 0;
+
+  bool _isActiveSession(String uid, int generation) =>
+      _listeningUid == uid && _listenerGeneration == generation && currentUid == uid;
 
   String? get currentUid => _auth.currentUser?.uid;
 
@@ -101,11 +106,14 @@ class FirestoreService {
   // --- Dynamic On-Demand Subscriptions ---
   void ensureMonthSubscribed(String monthKey) {
     if (currentUid == null || monthKey.isEmpty) return;
+    final uid = _uid;
+    final generation = _listenerGeneration;
     final listenerKey = 'month_$monthKey';
     if (_subscriptions.containsKey(listenerKey)) return;
 
-    final docRef = _db.collection('users').doc(_uid).collection('logs').doc(monthKey);
+    final docRef = _db.collection('users').doc(uid).collection('logs').doc(monthKey);
     final sub = docRef.snapshots().listen((snap) {
+      if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
         _monthCache[monthKey] = snap.data()!;
         _rebuildFlatLogs();
@@ -118,8 +126,11 @@ class FirestoreService {
   Future<void> ensureAllMonthsLoaded() async {
     if (currentUid == null) return;
     if (_allMonthsLoadedThisSession) return;
+    final uid = _uid;
+    final generation = _listenerGeneration;
     try {
-      final snap = await _db.collection('users').doc(_uid).collection('logs').get();
+      final snap = await _db.collection('users').doc(uid).collection('logs').get();
+      if (!_isActiveSession(uid, generation)) return;
       for (final doc in snap.docs) {
         if (RegExp(r'^\d{4}-\d{2}$').hasMatch(doc.id)) {
           _monthCache[doc.id] = doc.data();
@@ -133,7 +144,9 @@ class FirestoreService {
 
   // --- Initial Device Hydration ---
   Future<void> _hydrateNewDevice(String uid) async {
+    final generation = _listenerGeneration;
     final prefs = await SharedPreferences.getInstance();
+    if (!_isActiveSession(uid, generation)) return;
     final hydrationKey = 'hydrated_v6_$uid';
     final alreadyHydrated = prefs.getBool(hydrationKey) ?? false;
 
@@ -142,6 +155,7 @@ class FirestoreService {
         final logsSnap = await _db.collection('users').doc(uid).collection('logs').get();
         final weightSnap = await _db.collection('users').doc(uid).collection('weight_logs').doc('all').get();
         final foodSnap = await _db.collection('users').doc(uid).collection('foods').doc('library').get();
+        if (!_isActiveSession(uid, generation)) return;
 
         for (final doc in logsSnap.docs) {
           if (RegExp(r'^\d{4}-\d{2}$').hasMatch(doc.id)) {
@@ -177,17 +191,21 @@ class FirestoreService {
   // --- Realtime Listeners Initialization (Total: 7 Listeners) ---
   void initializeListeners(String uid) {
     cancelListeners();
+    _listeningUid = uid;
+    final generation = _listenerGeneration;
 
     _hydrateNewDevice(uid);
 
     // 1. User Account Stream
     final userSub = _db.collection('users').doc(uid).snapshots().listen((doc) async {
+      if (!_isActiveSession(uid, generation)) return;
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         final remoteName = data['displayName']?.toString() ?? '';
         final remoteCompleted = data['onboarding_completed'] == true;
 
         final prefs = await SharedPreferences.getInstance();
+        if (!_isActiveSession(uid, generation)) return;
         final cachedName = prefs.getString('cached_user_name_$uid') ?? '';
         final cachedCompleted = prefs.getBool('onboarding_completed_$uid');
 
@@ -215,6 +233,7 @@ class FirestoreService {
 
     // 4. Lifetime Weight Stream
     final weightSub = _db.collection('users').doc(uid).collection('weight_logs').doc('all').snapshots().listen((snap) {
+      if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
         final entries = snap.data()!['entries'] as Map<String, dynamic>? ?? {};
         _weightCache.clear();
@@ -229,6 +248,7 @@ class FirestoreService {
 
     // 5. Food & Recipe Library Stream
     final foodSub = _db.collection('users').doc(uid).collection('foods').doc('library').snapshots().listen((snap) {
+      if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
         final items = snap.data()!['items'] as Map<String, dynamic>? ?? {};
         _foodCache.clear();
@@ -244,6 +264,7 @@ class FirestoreService {
 
     // 6. User Profile Stream
     final profileSub = _db.collection('users').doc(uid).collection('profile').doc('1').snapshots().listen((doc) {
+      if (!_isActiveSession(uid, generation)) return;
       if (doc.exists && doc.data() != null) {
         profileNotifier.value = UserProfile.fromFirestore(doc.data());
         AdaptiveCoachService().recomputeAndEvaluate();
@@ -253,11 +274,13 @@ class FirestoreService {
 
     // 7. Settings & Config Stream (Syncs cross-device dismissal & API keys in real time)
     final settingsSub = _db.collection('users').doc(uid).collection('settings').doc('config').snapshots().listen((snap) {
+      if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
         final data = snap.data()!;
         final remoteDismissedDate = data['dismissed_checkin_date']?.toString();
 
         SharedPreferences.getInstance().then((prefs) {
+          if (!_isActiveSession(uid, generation)) return;
           if (remoteDismissedDate != null && remoteDismissedDate.isNotEmpty) {
             prefs.setString('dismissed_checkin_date_$uid', remoteDismissedDate);
           } else {
@@ -271,6 +294,8 @@ class FirestoreService {
   }
 
   void cancelListeners() {
+    _listenerGeneration++;
+    _listeningUid = null;
     for (final sub in _subscriptions.values) {
       sub.cancel();
     }
