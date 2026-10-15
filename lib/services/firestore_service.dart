@@ -181,6 +181,7 @@ class FirestoreService {
         }
 
         await prefs.setBool(hydrationKey, true);
+        if (!_isActiveSession(uid, generation)) return;
         _rebuildFlatLogs();
         _rebuildFlatWeights();
         _rebuildFlatFoods();
@@ -340,6 +341,7 @@ class FirestoreService {
 
   // --- CRUD: Food Logs (Conflict-Free Map Entries under items.<logId>) ---
   Future<String> addLog(DailyLog log) async {
+    final uid = _uid;
     final String id = log.id.isNotEmpty
         ? log.id
         : 'log_${DateTime.now().millisecondsSinceEpoch}_${(1000 + (DateTime.now().microsecond % 9000))}';
@@ -361,6 +363,12 @@ class FirestoreService {
 
     final monthKey = log.date.substring(0, 7);
 
+    await _db.collection('users').doc(uid).collection('logs').doc(monthKey).set({
+      'month': monthKey,
+      'items': {id: resolvedLog.toMap()},
+    }, SetOptions(merge: true));
+    if (currentUid != uid) return id;
+
     if (!_monthCache.containsKey(monthKey)) {
       _monthCache[monthKey] = {'month': monthKey, 'items': <String, dynamic>{}};
     }
@@ -372,17 +380,11 @@ class FirestoreService {
 
     _rebuildFlatLogs();
 
-    _db.collection('users').doc(_uid).collection('logs').doc(monthKey).set({
-      'month': monthKey,
-      'items': {
-        id: resolvedLog.toMap(),
-      },
-    }, SetOptions(merge: true));
-
     return id;
   }
 
   Future<void> updateLog(String id, Map<String, dynamic> changes) async {
+    final uid = _uid;
     String? foundMonthKey;
     Map<String, dynamic>? updatedMap;
 
@@ -393,7 +395,6 @@ class FirestoreService {
         final existing = Map<String, dynamic>.from(itemsMap[id] as Map);
         existing.addAll(changes);
         existing['id'] = id;
-        itemsMap[id] = existing;
         updatedMap = existing;
         break;
       }
@@ -404,7 +405,13 @@ class FirestoreService {
       final newMonthKey = newDate.length >= 7 ? newDate.substring(0, 7) : foundMonthKey;
 
       if (newMonthKey != foundMonthKey) {
-        // Month changed: remove from old month, insert into new month
+        final batch = _db.batch();
+        final oldRef = _db.collection('users').doc(uid).collection('logs').doc(foundMonthKey);
+        final newRef = _db.collection('users').doc(uid).collection('logs').doc(newMonthKey);
+        batch.update(oldRef, {FieldPath(['items', id]): FieldValue.delete()});
+        batch.set(newRef, {'month': newMonthKey, 'items': {id: updatedMap}}, SetOptions(merge: true));
+        await batch.commit();
+        if (currentUid != uid) return;
         (_monthCache[foundMonthKey]?['items'] as Map?)?.remove(id);
 
         if (!_monthCache.containsKey(newMonthKey)) {
@@ -414,28 +421,21 @@ class FirestoreService {
 
         _rebuildFlatLogs();
 
-        _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).update({
-          FieldPath(['items', id]): FieldValue.delete(),
-        }).catchError((_) {});
-
-        _db.collection('users').doc(_uid).collection('logs').doc(newMonthKey).set({
-          'month': newMonthKey,
-          'items': {id: updatedMap},
-        }, SetOptions(merge: true)).catchError((_) {});
       } else {
-        // Same month update
-        _rebuildFlatLogs();
-
-        _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey).set({
-          'items': {
-            id: updatedMap,
-          },
+        await _db.collection('users').doc(uid).collection('logs').doc(foundMonthKey).set({
+          'items': {id: updatedMap},
         }, SetOptions(merge: true));
+        if (currentUid != uid) return;
+        (_monthCache[foundMonthKey]?['items'] as Map)[id] = updatedMap;
+        _rebuildFlatLogs();
       }
+    } else {
+      throw StateError('Log $id was not found in the loaded months.');
     }
   }
 
   Future<void> deleteLog(String id, {String? date}) async {
+    final uid = _uid;
     String? foundMonthKey;
     String targetKey = id;
 
@@ -446,7 +446,6 @@ class FirestoreService {
       if (itemsMap is Map) {
         if (itemsMap.containsKey(id)) {
           targetKey = id;
-          itemsMap.remove(id);
         } else {
           final matchedKey = itemsMap.keys.firstWhere(
             (k) => itemsMap[k] is Map && itemsMap[k]['id'] == id,
@@ -454,7 +453,6 @@ class FirestoreService {
           );
           if (matchedKey != null) {
             targetKey = matchedKey.toString();
-            itemsMap.remove(matchedKey);
           }
         }
       }
@@ -467,7 +465,6 @@ class FirestoreService {
           if (itemsMap.containsKey(id)) {
             foundMonthKey = entry.key;
             targetKey = id;
-            itemsMap.remove(id);
             break;
           } else {
             final matchedKey = itemsMap.keys.firstWhere(
@@ -477,7 +474,6 @@ class FirestoreService {
             if (matchedKey != null) {
               foundMonthKey = entry.key;
               targetKey = matchedKey.toString();
-              itemsMap.remove(matchedKey);
               break;
             }
           }
@@ -485,58 +481,45 @@ class FirestoreService {
       }
     }
 
-    _rebuildFlatLogs();
-
     if (foundMonthKey != null) {
-      final docRef = _db.collection('users').doc(_uid).collection('logs').doc(foundMonthKey);
-
-      try {
-        await docRef.update({
-          FieldPath(['items', targetKey]): FieldValue.delete(),
-        });
-      } catch (_) {
-        try {
-          final snap = await docRef.get();
-          if (snap.exists && snap.data() != null) {
-            final items = Map<String, dynamic>.from(snap.data()!['items'] as Map? ?? {});
-            items.remove(targetKey);
-            items.remove(id);
-            await docRef.set({'items': items}, SetOptions(merge: true));
-          }
-        } catch (e) {
-          debugPrint('[FirestoreService] Delete failed: $e');
-        }
+      final docRef = _db.collection('users').doc(uid).collection('logs').doc(foundMonthKey);
+      await docRef.update({FieldPath(['items', targetKey]): FieldValue.delete()});
+      if (currentUid == uid) {
+        (_monthCache[foundMonthKey]?['items'] as Map?)?.remove(targetKey);
+        _rebuildFlatLogs();
       }
+    } else {
+      throw StateError('Log $id was not found in the loaded months.');
     }
   }
 
   // --- CRUD: Weight Tracker ---
   Future<void> setWeightLog(WeightLog log) async {
+    final uid = _uid;
+    final batch = _db.batch();
+    batch.set(_db.collection('users').doc(uid).collection('weight_logs').doc('all'),
+        {'entries': {log.date: log.weightKg}}, SetOptions(merge: true));
+    batch.set(_db.collection('users').doc(uid).collection('profile').doc('1'),
+        {'weight': log.weightKg}, SetOptions(merge: true));
+    await batch.commit();
+    if (currentUid != uid) return;
     _weightCache[log.date] = log.weightKg;
     _rebuildFlatWeights();
-
-    _db.collection('users').doc(_uid).collection('weight_logs').doc('all').set({
-      'entries': {
-        log.date: log.weightKg,
-      }
-    }, SetOptions(merge: true));
-
-    _db.collection('users').doc(_uid).collection('profile').doc('1').set({
-      'weight': log.weightKg,
-    }, SetOptions(merge: true));
   }
 
   Future<void> deleteWeightLog(String date) async {
+    final uid = _uid;
+    await _db.collection('users').doc(uid).collection('weight_logs').doc('all').update({
+      FieldPath(['entries', date]): FieldValue.delete(),
+    });
+    if (currentUid != uid) return;
     _weightCache.remove(date);
     _rebuildFlatWeights();
-
-    _db.collection('users').doc(_uid).collection('weight_logs').doc('all').update({
-      'entries.$date': FieldValue.delete(),
-    });
   }
 
   // --- CRUD: Food Library ---
   Future<String> addFood(FoodItem food) async {
+    final uid = _uid;
     final String id = food.id.isNotEmpty ? food.id : 'food_${DateTime.now().millisecondsSinceEpoch}';
     final resolvedFood = FoodItem(
       id: id,
@@ -554,45 +537,53 @@ class FirestoreService {
       ingredients: food.ingredients,
     );
 
-    _foodCache[id] = resolvedFood;
-    _rebuildFlatFoods();
-
-    _db.collection('users').doc(_uid).collection('foods').doc('library').set({
+    await _db.collection('users').doc(uid).collection('foods').doc('library').set({
       'items': {
         id: resolvedFood.toMap(),
       }
     }, SetOptions(merge: true));
+    if (currentUid == uid) {
+      _foodCache[id] = resolvedFood;
+      _rebuildFlatFoods();
+    }
 
     return id;
   }
 
   Future<void> updateFood(String id, Map<String, dynamic> changes) async {
+    final uid = _uid;
     final existing = _foodCache[id];
     if (existing != null) {
       final map = existing.toMap()..addAll(changes);
       final updated = FoodItem.fromFirestore(id, map);
-      _foodCache[id] = updated;
-      _rebuildFlatFoods();
-
-      _db.collection('users').doc(_uid).collection('foods').doc('library').set({
+      await _db.collection('users').doc(uid).collection('foods').doc('library').set({
         'items': {
           id: updated.toMap(),
         }
       }, SetOptions(merge: true));
+      if (currentUid == uid) {
+        _foodCache[id] = updated;
+        _rebuildFlatFoods();
+      }
+    } else {
+      throw StateError('Food $id was not found in the library.');
     }
   }
 
   Future<void> deleteFood(String id) async {
-    _foodCache.remove(id);
-    _rebuildFlatFoods();
-
-    _db.collection('users').doc(_uid).collection('foods').doc('library').update({
-      'items.$id': FieldValue.delete(),
+    final uid = _uid;
+    await _db.collection('users').doc(uid).collection('foods').doc('library').update({
+      FieldPath(['items', id]): FieldValue.delete(),
     });
+    if (currentUid == uid) {
+      _foodCache.remove(id);
+      _rebuildFlatFoods();
+    }
   }
 
   // --- User Profile ---
   Future<void> saveProfile(UserProfile profile) async {
+    final uid = _uid;
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final currentProfile = profileNotifier.value;
 
@@ -654,11 +645,10 @@ class FirestoreService {
       goalPhases: currentPhases,
     );
 
-    profileNotifier.value = updatedProfile;
-
-    _db.collection('users').doc(_uid).collection('profile').doc('1').set(
+    await _db.collection('users').doc(uid).collection('profile').doc('1').set(
       updatedProfile.toMap(),
       SetOptions(merge: true),
     );
+    if (currentUid == uid) profileNotifier.value = updatedProfile;
   }
 }

@@ -114,7 +114,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     }
   }
 
-  void _submitWeightLog() {
+  Future<void> _submitWeightLog() async {
     final weight = double.tryParse(_weightInputController.text);
     if (weight == null || weight <= 0) {
       _showToast('Please enter a valid body weight.', isError: true);
@@ -123,7 +123,13 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
 
     final dateKey = DateFormat('yyyy-MM-dd').format(_selectedLogDate);
 
-    _firestoreService.setWeightLog(WeightLog(date: dateKey, weightKg: weight));
+    try {
+      await _firestoreService.setWeightLog(WeightLog(date: dateKey, weightKg: weight));
+    } catch (error) {
+      if (mounted) _showToast('Could not save weight: $error', isError: true);
+      return;
+    }
+    if (!mounted) return;
     HapticFeedback.mediumImpact();
     _showToast('Weight logged for ${DateFormat('MMM d').format(_selectedLogDate)}!');
     _weightInputController.clear();
@@ -886,11 +892,17 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     final newW = double.tryParse(editCtrl.text);
                     if (newW != null && newW > 0) {
                       Navigator.pop(ctx);
-                      _firestoreService.setWeightLog(WeightLog(date: log.date, weightKg: newW));
+                      try {
+                        await _firestoreService.setWeightLog(WeightLog(date: log.date, weightKg: newW));
+                      } catch (error) {
+                        if (mounted) _showToast('Could not update weight: $error', isError: true);
+                        return;
+                      }
+                      if (!mounted) return;
                       HapticFeedback.mediumImpact();
                       _showToast('Weight log updated!');
                     }
@@ -940,9 +952,15 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     Navigator.pop(ctx, true);
-                    _firestoreService.deleteWeightLog(log.date);
+                    try {
+                      await _firestoreService.deleteWeightLog(log.date);
+                    } catch (error) {
+                      if (mounted) _showToast('Could not delete weight: $error', isError: true);
+                      return;
+                    }
+                    if (!mounted) return;
                     HapticFeedback.mediumImpact();
                     _showToast('Weight log deleted.');
                   },

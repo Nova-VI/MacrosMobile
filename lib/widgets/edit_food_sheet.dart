@@ -185,10 +185,18 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     Navigator.pop(ctx, true);
+                    try {
+                      await FirestoreService().deleteFood(widget.food.id);
+                    } catch (error) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not delete food: $error')),
+                      );
+                      return;
+                    }
+                    if (!mounted) return;
                     Navigator.pop(context);
-                    FirestoreService().deleteFood(widget.food.id);
                     HapticFeedback.mediumImpact();
                   },
                   child: const Text('Delete'),
@@ -201,7 +209,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     );
   }
 
-  void _saveChanges() {
+  Future<void> _saveChanges() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
@@ -243,9 +251,17 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       ingredients: widget.food.ingredients,
     );
 
+    try {
+      await FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save food: $error')),
+      );
+      return;
+    }
+    if (!mounted) return;
     Navigator.pop(context);
     HapticFeedback.mediumImpact();
-    FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
   }
 
   @override

@@ -775,7 +775,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  void _saveOnlyToLibrary() {
+  Future<void> _saveOnlyToLibrary() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       _showToast('Food name is required to save to library.', isError: true);
@@ -807,15 +807,18 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: _getParsedMicros().scale(mult > 0 ? 1.0 / mult : 1.0),
     );
 
-    HapticFeedback.mediumImpact();
-    _showToast('"$name" saved to library!');
-    _resetToNewQuickLog();
-
-    _firestoreService.addFood(item).then((id) {
+    try {
+      final id = await _firestoreService.addFood(item);
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      _showToast('"$name" saved to library!');
+      _resetToNewQuickLog();
       if (_selectedEmoji == '🍽️') {
         _handleBackgroundAiEmoji(id, null, name);
       }
-    });
+    } catch (error) {
+      if (mounted) _showToast('Could not save food: $error', isError: true);
+    }
   }
 
   MicroNutrients _getParsedMicros() {
@@ -834,7 +837,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
-  void _submitLog() {
+  Future<void> _submitLog() async {
     final name = _nameController.text.trim();
     if (name.isEmpty && _saveToLibrary) {
       _showToast('Food name is required to save to library.', isError: true);
@@ -856,6 +859,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     final String finalEmoji = _selectedEmoji;
     final bool triggerAiEmoji = (finalEmoji == '🍽️' && name.isNotEmpty);
 
+    try {
     if (_saveToLibrary && _editingLogId == null && !_isLibraryBound) {
       final libraryItem = FoodItem(
         id: '',
@@ -875,7 +879,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         micros: micros.scale(mult > 0 ? 1.0 / mult : 1.0),
       );
 
-      _firestoreService.addFood(libraryItem).then((id) => foodId = id);
+      foodId = await _firestoreService.addFood(libraryItem);
     }
 
     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
@@ -902,19 +906,24 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: micros,
     );
 
-    HapticFeedback.mediumImpact();
     if (_editingLogId != null) {
-      _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
+      await _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
       _showToast('Daily log updated!');
       widget.onLogCompleted();
     } else {
+      final newLogId = await _firestoreService.addLog(logPayload);
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
       _showToast('"$displayName" logged successfully!');
       _resetToNewQuickLog();
-      _firestoreService.addLog(logPayload).then((newLogId) {
-        if (triggerAiEmoji) {
-          _handleBackgroundAiEmoji(foodId, newLogId, displayName);
-        }
-      });
+      if (triggerAiEmoji) {
+        _handleBackgroundAiEmoji(foodId, newLogId, displayName);
+      }
+    }
+    } catch (error) {
+      if (mounted) _showToast('Could not save log: $error', isError: true);
     }
   }
 
@@ -964,10 +973,16 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     Navigator.pop(ctx, true);
                     final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
-                    _firestoreService.deleteLog(_editingLogId!, date: dateStr);
+                    try {
+                      await _firestoreService.deleteLog(_editingLogId!, date: dateStr);
+                    } catch (error) {
+                      if (mounted) _showToast('Could not delete log: $error', isError: true);
+                      return;
+                    }
+                    if (!mounted) return;
                     HapticFeedback.mediumImpact();
                     _showToast('Daily log entry deleted.');
                     widget.onLogCompleted();

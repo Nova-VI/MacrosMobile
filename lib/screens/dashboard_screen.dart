@@ -257,7 +257,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
     return val.toStringAsFixed(1);
   }
 
-  void _copyLogToToday(DailyLog log) {
+  Future<void> _copyLogToToday(DailyLog log) async {
     final now = DateTime.now();
     final todayStr = DateFormat('yyyy-MM-dd').format(now);
 
@@ -276,7 +276,15 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
       micros: log.micros,
     );
 
-    FirestoreService().addLog(newLog);
+    try {
+      await FirestoreService().addLog(newLog);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not copy log: $error')),
+      );
+      return;
+    }
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -760,15 +768,19 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
           return false;
         } else {
           final confirmed = await _showDeleteConfirmation(log);
-          return confirmed == true;
+          if (confirmed != true) return false;
+          try {
+            await FirestoreService().deleteLog(log.id, date: log.date);
+            return true;
+          } catch (error) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not delete log: $error')),
+            );
+            return false;
+          }
         }
       },
-      onDismissed: (direction) {
-        if (direction == DismissDirection.endToStart) {
-          HapticFeedback.mediumImpact();
-          FirestoreService().deleteLog(log.id, date: log.date);
-        }
-      },
+      onDismissed: (direction) => HapticFeedback.mediumImpact(),
       background: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.only(left: 18),
