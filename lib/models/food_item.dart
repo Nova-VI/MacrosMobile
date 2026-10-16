@@ -111,6 +111,7 @@ factory FoodItem.fromFirestore(String id, Map<String, dynamic>? data) {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'name': name,
       'source': source,
       'usda_fdc_id': usdaFdcId,

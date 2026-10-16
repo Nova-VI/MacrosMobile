@@ -612,6 +612,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
   void _populateFromLibraryItem(FoodItem food, {String? preserveTypedName}) {
     _currentBaseFood = food;
+    final calculatedCalories = food.macros.proteinG * 4.0 +
+        food.macros.carbsG * 4.0 + food.macros.fatG * 9.0;
+    _isManualCalories = food.macros.calories > 0 &&
+        (food.macros.calories - calculatedCalories).abs() > 0.5;
     _isLibraryBound = true;
     _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
     _selectedBaseUnit = food.baseUnit;
