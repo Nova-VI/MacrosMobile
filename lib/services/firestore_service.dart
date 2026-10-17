@@ -587,45 +587,7 @@ class FirestoreService {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final currentProfile = profileNotifier.value;
 
-    final currentPhases = List<GoalPhase>.from(
-      profile.goalPhases.isNotEmpty ? profile.goalPhases : currentProfile.goalPhases,
-    );
-
-    final bool isGoalChanged = currentProfile.goal != profile.goal ||
-        currentProfile.goalMode != profile.goalMode ||
-        currentPhases.isEmpty;
-
-    if (isGoalChanged) {
-      if (currentPhases.isNotEmpty && currentPhases.last.endDate == null) {
-        final lastPhase = currentPhases.removeLast();
-        if (lastPhase.startDate != todayStr) {
-          final yesterdayStr = DateFormat('yyyy-MM-dd').format(DateTime.now().subtract(const Duration(days: 1)));
-          currentPhases.add(GoalPhase(
-            id: lastPhase.id,
-            startDate: lastPhase.startDate,
-            endDate: yesterdayStr,
-            goal: lastPhase.goal,
-            goalType: lastPhase.goalType,
-            initialCalories: lastPhase.initialCalories,
-            initialProteinG: lastPhase.initialProteinG,
-            initialCarbsG: lastPhase.initialCarbsG,
-            initialFatG: lastPhase.initialFatG,
-            adjustments: lastPhase.adjustments,
-          ));
-        }
-      }
-
-      currentPhases.add(GoalPhase(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        startDate: todayStr,
-        goal: profile.goal,
-        goalType: profile.goalType,
-        initialCalories: profile.targetCalories,
-        initialProteinG: profile.targetProteinG,
-        initialCarbsG: profile.targetCarbsG,
-        initialFatG: profile.targetFatG,
-      ));
-    }
+    final currentPhases = buildGoalPhasesForSave(currentProfile, profile, todayStr);
 
     final updatedProfile = UserProfile(
       id: profile.id,

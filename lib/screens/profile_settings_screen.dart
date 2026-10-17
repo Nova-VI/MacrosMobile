@@ -390,7 +390,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _showToast('Name updated to "$trimmed"');
   }
 
-  void _saveProfileAndGoals() {
+  Future<void> _saveProfileAndGoals() async {
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
     final currentProfile = _firestoreService.profileNotifier.value;
@@ -414,7 +414,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       notes: 'Manual profile settings update',
     );
 
-    if (updatedPhases.isNotEmpty) {
+    final goalChanged = currentProfile.goal != _weeklyGoal ||
+        currentProfile.goalMode != _calcMethod;
+    if (updatedPhases.isNotEmpty && !goalChanged) {
       final lastPhase = updatedPhases.removeLast();
       final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
         ..removeWhere((a) => a.date == todayStr)
@@ -424,25 +426,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         id: lastPhase.id,
         startDate: lastPhase.startDate,
         endDate: lastPhase.endDate,
-        goal: _weeklyGoal,
+        goal: lastPhase.goal,
         goalType: lastPhase.goalType,
         initialCalories: lastPhase.initialCalories,
         initialProteinG: lastPhase.initialProteinG,
         initialCarbsG: lastPhase.initialCarbsG,
         initialFatG: lastPhase.initialFatG,
         adjustments: adjList,
-      ));
-    } else {
-      updatedPhases.add(GoalPhase(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        startDate: todayStr,
-        goal: _weeklyGoal,
-        goalType: GoalType.maintain,
-        initialCalories: newCal,
-        initialProteinG: newPro,
-        initialCarbsG: newCarb,
-        initialFatG: newFat,
-        adjustments: [manualAdjustment],
       ));
     }
 
@@ -464,10 +454,14 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       goalPhases: updatedPhases,
     );
 
-    // 0ms instant UI reaction
-    HapticFeedback.mediumImpact();
-    _showToast('Target goals saved successfully!');
-    _firestoreService.saveProfile(payload);
+    try {
+      await _firestoreService.saveProfile(payload);
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      _showToast('Target goals saved successfully!');
+    } catch (error) {
+      if (mounted) _showToast('Could not save goals: $error', isError: true);
+    }
   }
 
   void _saveApiSettings() {

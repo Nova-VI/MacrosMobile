@@ -275,6 +275,52 @@ class UserProfile {
   }
 }
 
+List<GoalPhase> buildGoalPhasesForSave(
+    UserProfile currentProfile, UserProfile newProfile, String todayStr) {
+  final phases = List<GoalPhase>.from(
+    newProfile.goalPhases.isNotEmpty
+        ? newProfile.goalPhases
+        : currentProfile.goalPhases,
+  );
+  final goalChanged = currentProfile.goal != newProfile.goal ||
+      currentProfile.goalMode != newProfile.goalMode || phases.isEmpty;
+  if (!goalChanged) return phases;
+
+  if (phases.isNotEmpty && phases.last.endDate == null) {
+    final last = phases.removeLast();
+    if (last.startDate != todayStr) {
+      final today = DateTime.parse(todayStr);
+      final yesterday = DateFormat('yyyy-MM-dd').format(
+        DateTime.utc(today.year, today.month, today.day - 1),
+      );
+      phases.add(GoalPhase(
+        id: last.id,
+        startDate: last.startDate,
+        endDate: yesterday,
+        goal: last.goal,
+        goalType: last.goalType,
+        initialCalories: last.initialCalories,
+        initialProteinG: last.initialProteinG,
+        initialCarbsG: last.initialCarbsG,
+        initialFatG: last.initialFatG,
+        adjustments: last.adjustments,
+      ));
+    }
+  }
+
+  phases.add(GoalPhase(
+    id: DateTime.now().microsecondsSinceEpoch.toString(),
+    startDate: todayStr,
+    goal: newProfile.goal,
+    goalType: newProfile.goalType,
+    initialCalories: newProfile.targetCalories,
+    initialProteinG: newProfile.targetProteinG,
+    initialCarbsG: newProfile.targetCarbsG,
+    initialFatG: newProfile.targetFatG,
+  ));
+  return phases;
+}
+
 extension UserProfileGoalExtension on UserProfile {
   GoalType get goalType {
     final val = double.tryParse(goal) ?? 0.0;
