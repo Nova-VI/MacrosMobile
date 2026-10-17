@@ -212,12 +212,16 @@ class FirestoreService {
 
         if (remoteName.isNotEmpty && remoteName != cachedName) {
           await prefs.setString('cached_user_name_$uid', remoteName);
-          AuthService.userNameNotifier.value = remoteName;
+          if (_isActiveSession(uid, generation)) {
+            AuthService.userNameNotifier.value = remoteName;
+          }
         }
 
         if (cachedCompleted != remoteCompleted) {
           await prefs.setBool('onboarding_completed_$uid', remoteCompleted);
-          AuthService.onboardingCompletedNotifier.value = remoteCompleted;
+          if (_isActiveSession(uid, generation)) {
+            AuthService.onboardingCompletedNotifier.value = remoteCompleted;
+          }
         }
       }
     });
