@@ -500,12 +500,21 @@ class FirestoreService {
   // --- CRUD: Weight Tracker ---
   Future<void> setWeightLog(WeightLog log) async {
     final uid = _uid;
-    final batch = _db.batch();
-    batch.set(_db.collection('users').doc(uid).collection('weight_logs').doc('all'),
-        {'entries': {log.date: log.weightKg}}, SetOptions(merge: true));
-    batch.set(_db.collection('users').doc(uid).collection('profile').doc('1'),
-        {'weight': log.weightKg}, SetOptions(merge: true));
-    await batch.commit();
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(log.date) ||
+        !log.weightKg.isFinite || log.weightKg <= 0) {
+      throw ArgumentError('Invalid weight entry.');
+    }
+    final weightsRef = _db.collection('users').doc(uid).collection('weight_logs').doc('all');
+    final profileRef = _db.collection('users').doc(uid).collection('profile').doc('1');
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(weightsRef);
+      final entries = Map<String, dynamic>.from(snapshot.data()?['entries'] as Map? ?? {});
+      entries[log.date] = log.weightKg;
+      transaction.set(weightsRef, {'entries': entries});
+      final latestDate = entries.keys.toList()..sort();
+      transaction.set(profileRef, {'weight': (entries[latestDate.last] as num).toDouble()},
+          SetOptions(merge: true));
+    });
     if (currentUid != uid) return;
     _weightCache[log.date] = log.weightKg;
     _rebuildFlatWeights();
@@ -513,8 +522,19 @@ class FirestoreService {
 
   Future<void> deleteWeightLog(String date) async {
     final uid = _uid;
-    await _db.collection('users').doc(uid).collection('weight_logs').doc('all').update({
-      FieldPath(['entries', date]): FieldValue.delete(),
+    final weightsRef = _db.collection('users').doc(uid).collection('weight_logs').doc('all');
+    final profileRef = _db.collection('users').doc(uid).collection('profile').doc('1');
+    await _db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(weightsRef);
+      final entries = Map<String, dynamic>.from(snapshot.data()?['entries'] as Map? ?? {});
+      if (!entries.containsKey(date)) throw StateError('Weight entry no longer exists.');
+      entries.remove(date);
+      transaction.set(weightsRef, {'entries': entries});
+      final dates = entries.keys.toList()..sort();
+      if (dates.isNotEmpty) {
+        transaction.set(profileRef, {'weight': (entries[dates.last] as num).toDouble()},
+            SetOptions(merge: true));
+      }
     });
     if (currentUid != uid) return;
     _weightCache.remove(date);
