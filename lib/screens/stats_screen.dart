@@ -9,6 +9,7 @@ import '../services/firestore_service.dart';
 import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/weekly_checkin_sheet.dart';
+import '../utils/calendar_date.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -50,7 +51,7 @@ class _StatsScreenState extends State<StatsScreen> {
       initialDateRange: _customStartDate != null && _customEndDate != null
           ? DateTimeRange(start: _customStartDate!, end: _customEndDate!)
           : DateTimeRange(
-              start: DateTime.now().subtract(const Duration(days: 14)),
+              start: addCalendarDays(DateTime.now(), -14),
               end: DateTime.now(),
             ),
       builder: (context, child) {
@@ -1100,21 +1101,21 @@ class _StatsScreenState extends State<StatsScreen> {
 
     if (_currentRange == '7') {
       for (int i = 6; i >= 0; i--) {
-        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(today.subtract(Duration(days: i))));
+        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(addCalendarDays(today, -i)));
       }
     } else if (_currentRange == '30') {
       for (int i = 29; i >= 0; i--) {
-        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(today.subtract(Duration(days: i))));
+        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(addCalendarDays(today, -i)));
       }
     } else if (_currentRange == '90') {
       for (int i = 89; i >= 0; i--) {
-        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(today.subtract(Duration(days: i))));
+        targetDateSequence.add(DateFormat('yyyy-MM-dd').format(addCalendarDays(today, -i)));
       }
     } else if (_currentRange == 'custom' && _customStartDate != null && _customEndDate != null) {
       DateTime cursor = _customStartDate!;
       while (!cursor.isAfter(_customEndDate!)) {
         targetDateSequence.add(DateFormat('yyyy-MM-dd').format(cursor));
-        cursor = cursor.add(const Duration(days: 1));
+        cursor = addCalendarDays(cursor, 1);
       }
     } else {
       final loggedDates = allLogs.map((l) => l.date).toSet().toList()..sort();
@@ -1122,7 +1123,7 @@ class _StatsScreenState extends State<StatsScreen> {
         DateTime cursor = DateFormat('yyyy-MM-dd').parse(loggedDates.first);
         while (!cursor.isAfter(today)) {
           targetDateSequence.add(DateFormat('yyyy-MM-dd').format(cursor));
-          cursor = cursor.add(const Duration(days: 1));
+          cursor = addCalendarDays(cursor, 1);
         }
       } else {
         targetDateSequence.add(DateFormat('yyyy-MM-dd').format(today));

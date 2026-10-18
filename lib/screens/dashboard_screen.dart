@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,7 @@ import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/macro_donut_chart.dart';
 import '../widgets/weekly_checkin_banner.dart';
+import '../utils/calendar_date.dart';
 
 enum DayPhase {
   morning('Morning', 5, 11),
@@ -32,10 +34,12 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
   static const int _initialPage = 5000;
   late final PageController _pageController;
-  late final DateTime _today;
+  late final DateTime _pageOriginDate;
+  late DateTime _today;
+  Timer? _midnightTimer;
   late final ValueNotifier<DateTime> _selectedDateNotifier;
   final ValueNotifier<bool> _showRemainingNotifier = ValueNotifier(false);
 
@@ -44,8 +48,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     final now = DateTime.now();
     _today = DateTime(now.year, now.month, now.day);
+    _pageOriginDate = _today;
     _selectedDateNotifier = ValueNotifier(_today);
     _pageController = PageController(initialPage: _initialPage);
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleMidnightRefresh();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AdaptiveCoachService().recomputeAndEvaluate();
@@ -54,6 +61,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
+    _midnightTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _selectedDateNotifier.dispose();
     _showRemainingNotifier.dispose();
@@ -61,20 +70,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   DateTime _getDateForPage(int pageIndex) {
-    return _today.add(Duration(days: pageIndex - _initialPage));
+    return addCalendarDays(_pageOriginDate, pageIndex - _initialPage);
   }
 
   int _getPageForDate(DateTime date) {
     final d = DateTime(date.year, date.month, date.day);
-    return _initialPage + d.difference(_today).inDays;
+    return _initialPage + calendarDaysBetween(_pageOriginDate, d);
   }
 
   String _getDateHeaderTitle(DateTime date) {
-    final diff = DateTime(date.year, date.month, date.day).difference(_today).inDays;
+    final diff = calendarDaysBetween(_today, date);
     if (diff == 0) return 'Today';
     if (diff == -1) return 'Yesterday';
     if (diff == 1) return 'Tomorrow';
     return DateFormat('EEE, MMM d').format(date);
+  }
+
+  void _scheduleMidnightRefresh() {
+    _midnightTimer?.cancel();
+    final now = DateTime.now();
+    final nextDay = DateTime(now.year, now.month, now.day + 1);
+    _midnightTimer = Timer(nextDay.difference(now) + const Duration(seconds: 1), () {
+      _refreshToday();
+      _scheduleMidnightRefresh();
+    });
+  }
+
+  void _refreshToday() {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final currentDay = DateTime(now.year, now.month, now.day);
+    if (calendarDaysBetween(_today, currentDay) != 0) {
+      setState(() => _today = currentDay);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshToday();
+      _scheduleMidnightRefresh();
+    }
   }
 
   void _goToPageOffset(int offset) {

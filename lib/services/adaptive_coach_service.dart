@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_profile.dart';
 import 'adaptive_coach_engine.dart';
 import 'firestore_service.dart';
+import '../utils/calendar_date.dart';
 
 class WeeklyCheckInProposal {
   final String date;
@@ -125,7 +126,7 @@ class AdaptiveCoachService {
       double sumValidCals = 0.0;
 
       for (int i = 1; i <= 14; i++) {
-        final lookbackDate = cursor.subtract(Duration(days: i));
+        final lookbackDate = addCalendarDays(cursor, -i);
         final lookbackKey = DateFormat('yyyy-MM-dd').format(lookbackDate);
         final dayCal = dailyCaloriesMap[lookbackKey] ?? 0.0;
 
@@ -153,7 +154,7 @@ class AdaptiveCoachService {
       computedTrendWeights[dateKey] = currentState.estimatedMassKg;
 
       studyDay++;
-      cursor = cursor.add(const Duration(days: 1));
+      cursor = addCalendarDays(cursor, 1);
     }
 
     liveObserverStateNotifier.value = currentState;
@@ -181,7 +182,7 @@ class AdaptiveCoachService {
     final uid = _firestoreService.currentUid;
 
     final activePhase = profile.goalPhases.isNotEmpty ? profile.goalPhases.last : null;
-    DateTime lastCheckInDate = today.subtract(const Duration(days: 8));
+    DateTime lastCheckInDate = addCalendarDays(today, -8);
 
     if (activePhase != null) {
       if (activePhase.adjustments.isNotEmpty) {
@@ -195,7 +196,7 @@ class AdaptiveCoachService {
       }
     }
 
-    final daysSinceLastReview = today.difference(lastCheckInDate).inDays;
+    final daysSinceLastReview = calendarDaysBetween(lastCheckInDate, today);
     if (daysSinceLastReview < 7) {
       checkInProposalNotifier.value = null;
       dismissedProposalNotifier.value = null;
@@ -206,7 +207,7 @@ class AdaptiveCoachService {
     int validWeightCount7d = 0;
 
     for (int i = 1; i <= 7; i++) {
-      final dKey = DateFormat('yyyy-MM-dd').format(today.subtract(Duration(days: i)));
+      final dKey = DateFormat('yyyy-MM-dd').format(addCalendarDays(today, -i));
       if ((dailyCaloriesMap[dKey] ?? 0.0) >= 450.0) validCalCount7d++;
       if ((dailyWeightsMap[dKey] ?? 0.0) > 0.0) validWeightCount7d++;
     }
@@ -251,7 +252,7 @@ class AdaptiveCoachService {
     }
 
     final phaseDaysElapsed = activePhase != null
-        ? today.difference(DateFormat('yyyy-MM-dd').parse(activePhase.startDate)).inDays
+        ? calendarDaysBetween(DateFormat('yyyy-MM-dd').parse(activePhase.startDate), today)
         : 14;
 
     final prescription = AdaptiveCoachEngine.synthesizePrescription(
@@ -286,7 +287,7 @@ class AdaptiveCoachService {
     if (dismissedDateStr != null && dismissedDateStr.isNotEmpty) {
       try {
         final d = DateFormat('yyyy-MM-dd').parse(dismissedDateStr);
-        daysSinceDismissal = today.difference(d).inDays;
+        daysSinceDismissal = calendarDaysBetween(d, today);
       } catch (_) {}
     }
 

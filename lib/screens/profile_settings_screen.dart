@@ -273,9 +273,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   Future<void> _pickAndUploadAvatar() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (image == null) return;
+    if (image == null || !mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
 
     setState(() => _isUploadingPhoto = true);
 
@@ -289,16 +292,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       final resBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
+        if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
         final data = json.decode(resBody);
         final secureUrl = data['secure_url'] as String;
 
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await user.updatePhotoURL(secureUrl);
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'photoURL': secureUrl,
-          }, SetOptions(merge: true));
-        }
+        await user.updatePhotoURL(secureUrl);
+        if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'photoURL': secureUrl,
+        }, SetOptions(merge: true));
+        if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
 
         setState(() {
           _userPhotoUrl = secureUrl;
