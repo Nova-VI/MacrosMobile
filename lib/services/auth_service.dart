@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'adaptive_coach_service.dart';
 import 'api_key_store.dart';
 import 'firestore_service.dart';
+import '../theme/app_theme.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -137,6 +138,7 @@ class AuthService {
     _syncUserRecord(credential.user);
     if (credential.user != null) {
       await loadCachedUserData(credential.user!.uid);
+      await ThemeManager.activate(credential.user!.uid);
       FirestoreService().initializeListeners(credential.user!.uid);
     }
     return credential;
@@ -150,6 +152,7 @@ class AuthService {
     _syncUserRecord(credential.user);
     if (credential.user != null) {
       await loadCachedUserData(credential.user!.uid);
+      await ThemeManager.activate(credential.user!.uid);
       FirestoreService().initializeListeners(credential.user!.uid);
     }
     return credential;
@@ -167,6 +170,7 @@ class AuthService {
     _syncUserRecord(userCredential.user);
     if (userCredential.user != null) {
       await loadCachedUserData(userCredential.user!.uid);
+      await ThemeManager.activate(userCredential.user!.uid);
       FirestoreService().initializeListeners(userCredential.user!.uid);
     }
     return userCredential;
@@ -187,6 +191,7 @@ class AuthService {
 
     await GoogleSignIn.instance.signOut();
     await _auth.signOut();
+    await ThemeManager.activate(null);
   }
 
   void _syncUserRecord(User? user) async {

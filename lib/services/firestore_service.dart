@@ -11,6 +11,7 @@ import '../models/user_profile.dart';
 import 'auth_service.dart';
 import 'adaptive_coach_service.dart';
 import 'api_key_store.dart';
+import '../theme/app_theme.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -305,6 +306,8 @@ class FirestoreService {
       } else {
         await prefs.remove('dismissed_checkin_date_$uid');
       }
+      if (!_isActiveSession(uid, generation) || revision != _settingsRevision) return;
+      await ThemeManager.applyRemote(uid, data);
       if (!_isActiveSession(uid, generation) || revision != _settingsRevision) return;
       settingsNotifier.value = Map<String, dynamic>.from(data);
       AdaptiveCoachService().recomputeAndEvaluate();

@@ -1,41 +1,101 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeManager {
   static final ValueNotifier<int> notifier = ValueNotifier(0);
+  static const _defaultAccent = Color(0xFF10B981);
+  static const _defaultBackground = Color(0xFF08080A);
+  static const _defaultSurface = Color(0xFF16161C);
+  static String? _activeUid;
+  static int _revision = 0;
+  static int _remoteRevision = 0;
 
   static Future<void> init() async {
+    await activate(FirebaseAuth.instance.currentUser?.uid);
+  }
+
+  static Future<void> activate(String? uid) async {
+    final revision = ++_revision;
+    _activeUid = uid;
+    AppColors.primary = _defaultAccent;
+    AppColors.background = _defaultBackground;
+    AppColors.surface = _defaultSurface;
+    notifier.value++;
+    if (uid == null) return;
+
     final prefs = await SharedPreferences.getInstance();
-    final acc = prefs.getInt('theme_accent');
-    final bg = prefs.getInt('theme_bg');
-    final sf = prefs.getInt('theme_surface');
+    if (revision != _revision || _activeUid != uid) return;
+    // Claim the old device-wide choice for the account that was signed in.
+    for (final name in ['theme_accent', 'theme_bg', 'theme_surface']) {
+      final legacy = prefs.getInt(name);
+      if (legacy != null && !prefs.containsKey('${name}_$uid')) {
+        await prefs.setInt('${name}_$uid', legacy);
+      }
+      if (legacy != null) await prefs.remove(name);
+    }
+    if (revision != _revision || _activeUid != uid) return;
+    final acc = prefs.getInt('theme_accent_$uid');
+    final bg = prefs.getInt('theme_bg_$uid');
+    final sf = prefs.getInt('theme_surface_$uid');
 
     if (acc != null) AppColors.primary = Color(acc);
     if (bg != null) AppColors.background = Color(bg);
     if (sf != null) AppColors.surface = Color(sf);
+    notifier.value++;
   }
 
-  static void setAccent(Color color) {
+  static Future<void> setAccent(Color color) async {
+    final uid = _activeUid;
+    if (uid == null) return;
     AppColors.primary = color;
     notifier.value++;
     HapticFeedback.lightImpact();
-
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setInt('theme_accent', color.toARGB32());
-    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('theme_accent_$uid', color.toARGB32());
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
+        'app_accent_color': color.toARGB32(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
-  static void setBackground(Color bg, Color surface) {
+  static Future<void> setBackground(Color bg, Color surface) async {
+    final uid = _activeUid;
+    if (uid == null) return;
     AppColors.background = bg;
     AppColors.surface = surface;
     notifier.value++;
     HapticFeedback.lightImpact();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('theme_bg_$uid', bg.toARGB32());
+    await prefs.setInt('theme_surface_$uid', surface.toARGB32());
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
+        'app_background_color': bg.toARGB32(),
+        'app_surface_color': surface.toARGB32(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
 
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setInt('theme_bg', bg.toARGB32());
-      prefs.setInt('theme_surface', surface.toARGB32());
-    });
+  static Future<void> applyRemote(String uid, Map<String, dynamic> settings) async {
+    if (_activeUid != uid) return;
+    final revision = _revision;
+    final remoteRevision = ++_remoteRevision;
+    final accent = settings['app_accent_color'];
+    final background = settings['app_background_color'];
+    final surface = settings['app_surface_color'];
+    if (accent is num) AppColors.primary = Color(accent.toInt());
+    if (background is num) AppColors.background = Color(background.toInt());
+    if (surface is num) AppColors.surface = Color(surface.toInt());
+    if (accent is num || background is num || surface is num) notifier.value++;
+    final prefs = await SharedPreferences.getInstance();
+    if (_activeUid != uid || revision != _revision || remoteRevision != _remoteRevision) return;
+    if (accent is num) await prefs.setInt('theme_accent_$uid', accent.toInt());
+    if (background is num) await prefs.setInt('theme_bg_$uid', background.toInt());
+    if (surface is num) await prefs.setInt('theme_surface_$uid', surface.toInt());
   }
 }
 
