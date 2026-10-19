@@ -52,22 +52,49 @@ class AdaptiveCoachService {
   final ValueNotifier<WeeklyCheckInProposal?> dismissedProposalNotifier = ValueNotifier(null);
   final ValueNotifier<AdaptiveCoachState?> liveObserverStateNotifier = ValueNotifier(null);
   final ValueNotifier<Map<String, double>> trendWeightsNotifier = ValueNotifier({});
+  Future<void>? _recomputeInFlight;
+  bool _recomputeRequested = false;
+  int _recomputeRevision = 0;
 
   void resetState() {
+    _recomputeRevision++;
+    _recomputeRequested = false;
     checkInProposalNotifier.value = null;
     dismissedProposalNotifier.value = null;
     liveObserverStateNotifier.value = null;
     trendWeightsNotifier.value = {};
   }
 
-  Future<void> recomputeAndEvaluate() async {
+  Future<void> recomputeAndEvaluate() {
+    _recomputeRevision++;
+    _recomputeRequested = true;
+    return _recomputeInFlight ??= _drainRecomputations().whenComplete(() {
+      _recomputeInFlight = null;
+    });
+  }
+
+  Future<void> _drainRecomputations() async {
+    while (_recomputeRequested) {
+      _recomputeRequested = false;
+      await _recomputeOnce(_recomputeRevision);
+    }
+  }
+
+  Future<void> _recomputeOnce(int revision) async {
+    final uid = _firestoreService.currentUid;
+    if (uid == null) return;
     await _firestoreService.ensureAllMonthsLoaded();
+    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) return;
 
     final profile = _firestoreService.profileNotifier.value;
     final allLogs = _firestoreService.logsNotifier.value;
     final allWeights = _firestoreService.weightLogsNotifier.value;
 
     if (profile.goalPhases.isEmpty || (allWeights.isEmpty && allLogs.isEmpty)) {
+      liveObserverStateNotifier.value = null;
+      trendWeightsNotifier.value = {};
+      checkInProposalNotifier.value = null;
+      dismissedProposalNotifier.value = null;
       return;
     }
 
@@ -157,6 +184,7 @@ class AdaptiveCoachService {
       cursor = addCalendarDays(cursor, 1);
     }
 
+    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) return;
     liveObserverStateNotifier.value = currentState;
     trendWeightsNotifier.value = computedTrendWeights;
 
@@ -166,6 +194,8 @@ class AdaptiveCoachService {
       dailyCaloriesMap: dailyCaloriesMap,
       dailyWeightsMap: dailyWeightsMap,
       computedTrendWeights: computedTrendWeights,
+      revision: revision,
+      uid: uid,
     );
   }
 
@@ -175,11 +205,12 @@ class AdaptiveCoachService {
     required Map<String, double> dailyCaloriesMap,
     required Map<String, double> dailyWeightsMap,
     required Map<String, double> computedTrendWeights,
+    required int revision,
+    required String uid,
   }) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayStr = DateFormat('yyyy-MM-dd').format(today);
-    final uid = _firestoreService.currentUid;
 
     final activePhase = profile.goalPhases.isNotEmpty ? profile.goalPhases.last : null;
     DateTime lastCheckInDate = addCalendarDays(today, -8);
@@ -281,7 +312,8 @@ class AdaptiveCoachService {
     );
 
     final prefs = await SharedPreferences.getInstance();
-    final dismissedDateStr = uid != null ? prefs.getString('dismissed_checkin_date_$uid') : null;
+    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) return;
+    final dismissedDateStr = prefs.getString('dismissed_checkin_date_$uid');
 
     int daysSinceDismissal = 999;
     if (dismissedDateStr != null && dismissedDateStr.isNotEmpty) {
@@ -321,30 +353,34 @@ class AdaptiveCoachService {
       final lastPhase = updatedPhases.removeLast();
       final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)..add(newAdjustment);
 
-      updatedPhases.add(GoalPhase(
-        id: lastPhase.id,
-        startDate: lastPhase.startDate,
-        endDate: lastPhase.endDate,
-        goal: lastPhase.goal,
-        goalType: lastPhase.goalType,
-        initialCalories: lastPhase.initialCalories,
-        initialProteinG: lastPhase.initialProteinG,
-        initialCarbsG: lastPhase.initialCarbsG,
-        initialFatG: lastPhase.initialFatG,
-        adjustments: adjList,
-      ));
+      updatedPhases.add(
+        GoalPhase(
+          id: lastPhase.id,
+          startDate: lastPhase.startDate,
+          endDate: lastPhase.endDate,
+          goal: lastPhase.goal,
+          goalType: lastPhase.goalType,
+          initialCalories: lastPhase.initialCalories,
+          initialProteinG: lastPhase.initialProteinG,
+          initialCarbsG: lastPhase.initialCarbsG,
+          initialFatG: lastPhase.initialFatG,
+          adjustments: adjList,
+        ),
+      );
     } else {
-      updatedPhases.add(GoalPhase(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        startDate: proposal.date,
-        goal: profile.goal,
-        goalType: profile.goalType,
-        initialCalories: proposal.proposedCalories.toDouble(),
-        initialProteinG: proposal.proposedProteinG.toDouble(),
-        initialCarbsG: proposal.proposedCarbsG.toDouble(),
-        initialFatG: proposal.proposedFatG.toDouble(),
-        adjustments: [newAdjustment],
-      ));
+      updatedPhases.add(
+        GoalPhase(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          startDate: proposal.date,
+          goal: profile.goal,
+          goalType: profile.goalType,
+          initialCalories: proposal.proposedCalories.toDouble(),
+          initialProteinG: proposal.proposedProteinG.toDouble(),
+          initialCarbsG: proposal.proposedCarbsG.toDouble(),
+          initialFatG: proposal.proposedFatG.toDouble(),
+          adjustments: [newAdjustment],
+        ),
+      );
     }
 
     final updatedProfile = UserProfile(
@@ -372,12 +408,7 @@ class AdaptiveCoachService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('dismissed_checkin_date_$uid');
 
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('settings')
-          .doc('config')
-          .set({
+      FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
         'dismissed_checkin_date': null,
       }, SetOptions(merge: true));
     }
@@ -396,12 +427,7 @@ class AdaptiveCoachService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('dismissed_checkin_date_$uid', proposal.date);
 
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('settings')
-          .doc('config')
-          .set({
+      FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
         'dismissed_checkin_date': proposal.date,
       }, SetOptions(merge: true));
     }
