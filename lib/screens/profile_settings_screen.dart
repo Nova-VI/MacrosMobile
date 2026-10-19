@@ -42,6 +42,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   // API Key Controllers
   final _usdaKeyController = TextEditingController();
   final _geminiKeyController = TextEditingController();
+  bool _usdaKeyDirty = false;
+  bool _geminiKeyDirty = false;
+  bool _brandedDirty = false;
 
   String _gender = 'male';
   String _activityLevel = '1.2';
@@ -112,11 +115,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _firestoreService.settingsNotifier.addListener(_applyRemoteSettings);
     _loadInitialData();
   }
 
   @override
   void dispose() {
+    _firestoreService.settingsNotifier.removeListener(_applyRemoteSettings);
     _heightController.dispose();
     _targetCalController.dispose();
     _targetProController.dispose();
@@ -125,6 +130,20 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     _usdaKeyController.dispose();
     _geminiKeyController.dispose();
     super.dispose();
+  }
+
+  void _applyRemoteSettings() {
+    if (!mounted) return;
+    final data = _firestoreService.settingsNotifier.value;
+    if (!_usdaKeyDirty && data['usda_api_key'] is String) {
+      _usdaKeyController.text = data['usda_api_key'];
+    }
+    if (!_geminiKeyDirty && data['gemini_api_key'] is String) {
+      _geminiKeyController.text = data['gemini_api_key'];
+    }
+    if (!_brandedDirty && data['usda_include_branded'] is bool) {
+      setState(() => _includeBranded = data['usda_include_branded']);
+    }
   }
 
   void _selectAll(TextEditingController ctrl) {
@@ -190,11 +209,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
     if (user != null) {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted || _authService.currentUser?.uid != user.uid) return;
       setState(() {
         _usdaKeyController.text = prefs.getString('usda_api_key_${user.uid}') ?? '';
         _geminiKeyController.text = prefs.getString('gemini_api_key_${user.uid}') ?? '';
         _includeBranded = prefs.getBool('usda_include_branded_${user.uid}') ?? false;
       });
+      _applyRemoteSettings();
     }
   }
 
@@ -480,27 +501,34 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
-  void _saveApiSettings() {
+  Future<void> _saveApiSettings() async {
     final usdaKey = _usdaKeyController.text.trim();
     final geminiKey = _geminiKeyController.text.trim();
+    final includeBranded = _includeBranded;
     final user = FirebaseAuth.instance.currentUser;
-
-    if (user != null) {
-      SharedPreferences.getInstance().then((prefs) {
-        prefs.setString('usda_api_key_${user.uid}', usdaKey);
-        prefs.setString('gemini_api_key_${user.uid}', geminiKey);
-        prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
-      });
-
-      FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
+    if (user == null) return;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
         'usda_api_key': usdaKey,
         'gemini_api_key': geminiKey,
-        'usda_include_branded': _includeBranded,
+        'usda_include_branded': includeBranded,
       }, SetOptions(merge: true));
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('usda_api_key_${user.uid}', usdaKey);
+      await prefs.setString('gemini_api_key_${user.uid}', geminiKey);
+      await prefs.setBool('usda_include_branded_${user.uid}', includeBranded);
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+      _usdaKeyDirty = false;
+      _geminiKeyDirty = false;
+      _brandedDirty = false;
+      HapticFeedback.mediumImpact();
+      _showToast('API credentials saved!');
+    } catch (_) {
+      if (mounted && FirebaseAuth.instance.currentUser?.uid == user.uid) {
+        _showToast('Could not save API credentials.', isError: true);
+      }
     }
-
-    HapticFeedback.mediumImpact();
-    _showToast('API credentials saved!');
   }
 
   void _showToast(String message, {bool isError = false}) {
@@ -1477,6 +1505,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
           TextField(
             controller: _usdaKeyController,
+            onChanged: (_) => _usdaKeyDirty = true,
             onTap: () => _selectAll(_usdaKeyController),
             obscureText: _obscureUsda,
             style: const TextStyle(color: AppColors.textMain),
@@ -1506,6 +1535,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
           TextField(
             controller: _geminiKeyController,
+            onChanged: (_) => _geminiKeyDirty = true,
             onTap: () => _selectAll(_geminiKeyController),
             obscureText: _obscureGemini,
             style: const TextStyle(color: AppColors.textMain),
@@ -1535,7 +1565,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
           CheckboxListTile(
             value: _includeBranded,
-            onChanged: (val) => setState(() => _includeBranded = val ?? false),
+            onChanged: (val) => setState(() {
+              _includeBranded = val ?? false;
+              _brandedDirty = true;
+            }),
             activeColor: AppColors.primary,
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,

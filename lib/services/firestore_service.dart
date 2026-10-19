@@ -24,6 +24,7 @@ class FirestoreService {
   final ValueNotifier<List<FoodItem>> foodsNotifier = ValueNotifier([]);
   final ValueNotifier<List<WeightLog>> weightLogsNotifier = ValueNotifier([]);
   final ValueNotifier<UserProfile> profileNotifier = ValueNotifier(UserProfile());
+  final ValueNotifier<Map<String, dynamic>> settingsNotifier = ValueNotifier({});
 
   // In-memory bucket stores
   final Map<String, Map<String, dynamic>> _monthCache = {}; // "YYYY-MM" -> raw month doc data
@@ -35,6 +36,7 @@ class FirestoreService {
   bool _allMonthsLoadedThisSession = false;
   String? _listeningUid;
   int _listenerGeneration = 0;
+  int _settingsRevision = 0;
 
   bool _isActiveSession(String uid, int generation) =>
       _listeningUid == uid && _listenerGeneration == generation && currentUid == uid;
@@ -278,28 +280,40 @@ class FirestoreService {
     _subscriptions['profile'] = profileSub;
 
     // 7. Settings & Config Stream (Syncs cross-device dismissal & API keys in real time)
-    final settingsSub = _db.collection('users').doc(uid).collection('settings').doc('config').snapshots().listen((snap) {
+    final settingsSub = _db.collection('users').doc(uid).collection('settings').doc('config').snapshots().listen((snap) async {
       if (!_isActiveSession(uid, generation)) return;
-      if (snap.exists && snap.data() != null) {
-        final data = snap.data()!;
-        final remoteDismissedDate = data['dismissed_checkin_date']?.toString();
-
-        SharedPreferences.getInstance().then((prefs) {
-          if (!_isActiveSession(uid, generation)) return;
-          if (remoteDismissedDate != null && remoteDismissedDate.isNotEmpty) {
-            prefs.setString('dismissed_checkin_date_$uid', remoteDismissedDate);
-          } else {
-            prefs.remove('dismissed_checkin_date_$uid');
-          }
-          AdaptiveCoachService().recomputeAndEvaluate();
-        });
+      final revision = ++_settingsRevision;
+      final data = snap.data() ?? <String, dynamic>{};
+      final prefs = await SharedPreferences.getInstance();
+      if (!_isActiveSession(uid, generation) || revision != _settingsRevision) return;
+      if (data['usda_api_key'] is String) {
+        await prefs.setString('usda_api_key_$uid', data['usda_api_key']);
       }
+      if (revision != _settingsRevision) return;
+      if (data['gemini_api_key'] is String) {
+        await prefs.setString('gemini_api_key_$uid', data['gemini_api_key']);
+      }
+      if (revision != _settingsRevision) return;
+      if (data['usda_include_branded'] is bool) {
+        await prefs.setBool('usda_include_branded_$uid', data['usda_include_branded']);
+      }
+      if (revision != _settingsRevision) return;
+      final remoteDismissedDate = data['dismissed_checkin_date']?.toString();
+      if (remoteDismissedDate != null && remoteDismissedDate.isNotEmpty) {
+        await prefs.setString('dismissed_checkin_date_$uid', remoteDismissedDate);
+      } else {
+        await prefs.remove('dismissed_checkin_date_$uid');
+      }
+      if (!_isActiveSession(uid, generation) || revision != _settingsRevision) return;
+      settingsNotifier.value = Map<String, dynamic>.from(data);
+      AdaptiveCoachService().recomputeAndEvaluate();
     });
     _subscriptions['settings'] = settingsSub;
   }
 
   void cancelListeners() {
     _listenerGeneration++;
+    _settingsRevision++;
     _listeningUid = null;
     for (final sub in _subscriptions.values) {
       sub.cancel();
@@ -315,6 +329,7 @@ class FirestoreService {
     foodsNotifier.value = [];
     weightLogsNotifier.value = [];
     profileNotifier.value = UserProfile();
+    settingsNotifier.value = {};
   }
 
   List<DailyLog> getLogsForDate(String date) {
