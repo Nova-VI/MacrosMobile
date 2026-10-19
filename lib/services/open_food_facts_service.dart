@@ -63,7 +63,6 @@ class OpenFoodFactsService {
       final product = data['product'] as Map<String, dynamic>;
       final nutriments = product['nutriments'] as Map<String, dynamic>? ?? {};
 
-      // 1. Resolve Food Name
       String name =
           product['product_name']?.toString().trim() ??
           product['product_name_en']?.toString().trim() ??
@@ -79,7 +78,6 @@ class OpenFoodFactsService {
         name = 'Scanned Product ($cleanCode)';
       }
 
-      // 2. Parse Serving Size and Unit
       final quantityUnit =
           product['serving_quantity_unit']?.toString().trim().toLowerCase() ??
           '';
@@ -110,11 +108,11 @@ class OpenFoodFactsService {
 
       final baseUnit = isLiquid ? 'ml' : 'g';
 
-      // 3. Helper to parse nutrients per 100g
       double getNutrimentPer100g(
         String key, [
         List<String> altKeys = const [],
       ]) {
+        // Product records vary between explicit per-100g keys and plain nutrient keys.
         if (nutriments.containsKey('${key}_100g')) {
           return (nutriments['${key}_100g'] as num?)?.toDouble() ?? 0.0;
         }
@@ -138,7 +136,6 @@ class OpenFoodFactsService {
       final double c100 = getNutrimentPer100g('carbohydrates', ['carbs']);
       final double f100 = getNutrimentPer100g('fat', ['lipids']);
 
-      // 4. Quality check: if all macros are 0, mark as unreliable
       if (p100 == 0.0 && c100 == 0.0 && f100 == 0.0) {
         final incompleteItem = FoodItem(
           id: '',
@@ -160,7 +157,6 @@ class OpenFoodFactsService {
         );
       }
 
-      // 5. Scale to parsed base serving and calculate calories on the fly
       final double baseProtein = p100 * ratio;
       final double baseCarbs = c100 * ratio;
       final double baseFat = f100 * ratio;

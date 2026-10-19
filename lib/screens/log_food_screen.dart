@@ -40,13 +40,11 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   final _servingsController = TextEditingController(text: '1');
   final _totalAmountController = TextEditingController(text: '100');
 
-  // Macros
   final _proteinController = TextEditingController();
   final _carbsController = TextEditingController();
   final _fatController = TextEditingController();
   final _caloriesController = TextEditingController();
 
-  // Micros
   final _fiberController = TextEditingController();
   final _sugarController = TextEditingController();
   final _sodiumController = TextEditingController();

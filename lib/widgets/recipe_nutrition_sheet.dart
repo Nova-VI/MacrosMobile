@@ -61,7 +61,6 @@ class RecipeNutritionSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Fact Tiles
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),

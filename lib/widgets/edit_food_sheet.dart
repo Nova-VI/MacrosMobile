@@ -29,7 +29,6 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
   late final TextEditingController _caloriesController;
   late final TextEditingController _densityController;
 
-  // Micros
   late final TextEditingController _fiberController;
   late final TextEditingController _sugarController;
   late final TextEditingController _sodiumController;

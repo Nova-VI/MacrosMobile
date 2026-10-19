@@ -32,7 +32,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final AuthService _authService = AuthService();
 
-  // Calculator Form Controllers
   DateTime _birthDate = DateTime(2001, 1, 1);
   final _heightController = TextEditingController(text: '175');
   final _targetCalController = TextEditingController();
@@ -40,7 +39,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   final _targetCarbController = TextEditingController();
   final _targetFatController = TextEditingController();
 
-  // API Key Controllers
   final _usdaKeyController = TextEditingController();
   final _geminiKeyController = TextEditingController();
   bool _usdaKeyDirty = false;
@@ -54,7 +52,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   String _calcMethod = 'calculator';
   DateTime _goalPhaseStartDate = DateTime.now();
 
-  // Memory baseline to preserve adaptive corrections when toggling dropdowns
   String _originalGoal = '0';
   double _originalActiveCalories = 2000.0;
 
@@ -228,15 +225,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
     double targetCalsDouble;
 
+    // Macro edits and reselecting the active goal keep any adaptive calorie adjustment.
     if (isMacroOnlyChange) {
-      // Macro changes preserve the active calorie budget
       targetCalsDouble = double.tryParse(_targetCalController.text) ?? _originalActiveCalories;
     } else {
       if (_weeklyGoal == _originalGoal) {
-        // Switching back to active goal strategy preserves the adaptive check-in target (e.g. -628 kcal)
         targetCalsDouble = _originalActiveCalories;
       } else {
-        // Genuine new goal strategy calculates from TDEE + Goal offset
         final goalAdjustment = double.tryParse(_weeklyGoal) ?? 0.0;
         targetCalsDouble = _effectiveBaseTdee + goalAdjustment;
       }
@@ -490,7 +485,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       activity: _activityLevel,
       goal: _weeklyGoal,
       proteinMultiplier: _proteinMultiplier,
-      estimatedTdee: _effectiveBaseTdee, // Never null
+      estimatedTdee: _effectiveBaseTdee,
       goalPhases: updatedPhases,
     );
 
@@ -859,7 +854,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Live TDEE Expenditure Card
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -907,7 +901,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Active Goal Phase Info Pill
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
@@ -1077,14 +1070,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 onChanged: (val) {
                   if (val != null) {
                     setState(() => _proteinMultiplier = val);
-                    // Protein modification locks the active calorie budget
                     _performLiveCalculations(isMacroOnlyChange: true);
                   }
                 },
               ),
               const SizedBox(height: 16),
 
-              // Target Summary Card
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(

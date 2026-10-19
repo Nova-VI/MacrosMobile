@@ -28,7 +28,6 @@ class ThemeManager {
 
     final prefs = await SharedPreferences.getInstance();
     if (revision != _revision || _activeUid != uid) return;
-    // Claim the old device-wide choice for the account that was signed in.
     for (final name in ['theme_accent', 'theme_bg', 'theme_surface']) {
       final legacy = prefs.getInt(name);
       if (legacy != null && !prefs.containsKey('${name}_$uid')) {
@@ -100,17 +99,14 @@ class ThemeManager {
 }
 
 class AppColors {
-  // Mutable Theme Colors
   static Color background = const Color(0xFF08080A);
   static Color surface = const Color(0xFF16161C);
   static Color primary = const Color(0xFF10B981);
 
-  // Dedicated Semantic Macro Colors (Decoupled from UI Accents)
-  static const Color protein = Color.fromARGB(255, 51, 167, 47); // Forest Green
-  static const Color carbs = Color.fromARGB(255, 57, 187, 252);   //  Cyan
-  static const Color fat = Color(0xFFEAB308);     // Golden Yellow
+  static const Color protein = Color.fromARGB(255, 51, 167, 47);
+  static const Color carbs = Color.fromARGB(255, 57, 187, 252);
+  static const Color fat = Color(0xFFEAB308);
 
-  // Structural & Status Colors
   static const Color secondary = Color(0xFF3B82F6);
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);

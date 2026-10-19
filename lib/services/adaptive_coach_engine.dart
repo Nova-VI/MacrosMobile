@@ -145,7 +145,7 @@ class AdaptiveCoachEngine {
     required int studyDayIndex,
     double activityMultiplier = 1.38,
   }) {
-    // 1. A Priori Prediction
+    // Predict tissue mass and velocity before incorporating the next scale reading.
     final xPredL = prevState.estimatedMassKg + prevState.tissueVelocityKgPerDay;
     final xPredV = prevState.tissueVelocityKgPerDay;
 
@@ -154,7 +154,6 @@ class AdaptiveCoachEngine {
     final pPred10 = pPred01;
     final pPred11 = prevState.p11 + sigmaQv2;
 
-    // 2. Innovation & Huber Attenuation
     double updatedL = xPredL;
     double updatedV = xPredV;
     double updatedP00 = pPred00;
@@ -176,6 +175,7 @@ class AdaptiveCoachEngine {
         psi = math.min(1.0, deltaNeg / yk.abs());
       }
 
+      // Huber attenuation limits the influence of sudden weight jumps.
       final k0Star = k0 * psi;
       final k1Star = k1 * psi;
 
@@ -191,7 +191,7 @@ class AdaptiveCoachEngine {
       updatedL = prevState.estimatedMassKg + updatedV;
     }
 
-    // 3. Forbes Thermodynamics
+    // Convert trend-weight velocity to stored energy using the Forbes fat fraction.
     final pFat = initialFatMassKg / (initialFatMassKg + kappaForbes);
     final rhoW = (pFat * rhoFat) + ((1.0 - pFat) * rhoLean);
     final energyStoredFlux = updatedV * rhoW;
@@ -204,7 +204,6 @@ class AdaptiveCoachEngine {
     );
     final tdeePrior = bmr * activityMultiplier;
 
-    // 4. Quality & Bias with Expenditure Freeze Gate
     final bool hasSufficientIntake = validIntakeDaysCount >= 4 && validMeanCalories14d > 0;
 
     double omegaK = 0.0;
@@ -238,7 +237,7 @@ class AdaptiveCoachEngine {
       tdeeThermo = (validMeanCalories14d / safeBias) - energyStoredFlux;
     }
 
-    // 5. Posterior TDEE with Expenditure Freeze Guard
+    // Without enough intake logs, freeze expenditure after its initial estimate.
     double updatedTdee = prevState.tdeeKcal;
 
     if (hasSufficientIntake && tdeeThermo != null) {
@@ -287,7 +286,6 @@ class AdaptiveCoachEngine {
     final updatedIntegrator = (currentState.integratorKcalDays + (ePos * 1.0)).clamp(-iMax, iMax);
     final deltaPI = (kpGain * eV) + (kiGain * updatedIntegrator);
 
-    // Direct goal offset (preserves exact target deficit/surplus)
     final nominalDeficitKcal = (targetWeeklyWeightDeltaKg * 7700.0) / 7.0;
     final eNominal = currentState.tdeeKcal + nominalDeficitKcal;
     final eTargetContinuous = (eNominal - deltaPI).clamp(clinicalFloorKcal, clinicalCeilingKcal);

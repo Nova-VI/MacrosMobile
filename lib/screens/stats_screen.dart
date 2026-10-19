@@ -75,7 +75,6 @@ class _StatsScreenState extends State<StatsScreen> {
         _customEndDate = picked.end;
       });
 
-      // Subscribe to all months in custom range
       DateTime cursor = picked.start;
       while (!cursor.isAfter(picked.end)) {
         _firestoreService.ensureMonthSubscribed(DateFormat('yyyy-MM').format(cursor));

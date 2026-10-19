@@ -28,10 +28,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentStep = 0;
   static const int _totalSteps = 9;
 
-  // Step 1: Name
   final _nameController = TextEditingController();
 
-  // Step 2: Demographics & Birthday Wheel Picker
   String _gender = 'male';
   late int _selectedYear;
   late int _selectedMonth;
@@ -44,31 +42,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static final int _minYear = 1930;
   static final int _maxYear = DateTime.now().year;
 
-  // Step 3: Body Metrics
   final _heightController = TextEditingController(text: '175');
   final _weightController = TextEditingController(text: '70');
 
-  // Step 4: Activity Level
   String _activityLevel = '1.2';
 
-  // Step 5: Goal Strategy
   String _weeklyGoal = '0';
 
-  // Step 6: Protein Preference
   final List<double> _proteinOptions = [1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0];
-  int _selectedProteinIndex = 4; // Default 2.0
+  int _selectedProteinIndex = 4;
   late FixedExtentScrollController _proteinWheelController;
 
   String get _proteinMultiplier => _proteinOptions[_selectedProteinIndex].toStringAsFixed(1);
 
-  // Step 7: Targets & Manual Override
   bool _isManualOverride = false;
   final _targetCalController = TextEditingController(text: '2000');
   final _targetProController = TextEditingController(text: '140');
   final _targetCarbController = TextEditingController(text: '210');
   final _targetFatController = TextEditingController(text: '56');
 
-  // Step 8 & 9: API Keys
   final _usdaKeyController = TextEditingController();
   final _geminiKeyController = TextEditingController();
   bool _includeBranded = false;
@@ -261,7 +253,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       activity: _activityLevel,
       goal: _weeklyGoal,
       proteinMultiplier: _proteinMultiplier,
-      estimatedTdee: initialTdee, // Explicitly saved from Day 1
+      estimatedTdee: initialTdee,
     );
 
     await _firestoreService.saveProfile(payload);
@@ -496,12 +488,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 14),
 
-              // Separated 3-Wheel Tumbler with Horizontal Margins
               SizedBox(
                 height: 160,
                 child: Row(
                   children: [
-                    // Year Tumbler
                     Expanded(
                       flex: 4,
                       child: CupertinoPicker.builder(
@@ -538,7 +528,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     const SizedBox(width: 8),
 
-                    // Month Tumbler
                     Expanded(
                       flex: 4,
                       child: CupertinoPicker.builder(
@@ -574,7 +563,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     const SizedBox(width: 8),
 
-                    // Day Tumbler
                     Expanded(
                       flex: 3,
                       child: CupertinoPicker.builder(
@@ -1311,7 +1299,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // --- Helper Card and Input Widgets ---
 
   Widget _buildRadioCard({
     required String title,

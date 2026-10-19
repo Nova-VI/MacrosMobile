@@ -184,7 +184,7 @@ class AuthService {
     }
 
     FirestoreService().cancelListeners();
-    AdaptiveCoachService().resetState(); // Clear all coach in-memory variables
+    AdaptiveCoachService().resetState();
 
     userNameNotifier.value = 'User';
     onboardingCompletedNotifier.value = false;
@@ -227,7 +227,6 @@ class AuthService {
       'last_login': DateTime.now().toIso8601String(),
     }, SetOptions(merge: true));
 
-    // Cache API Keys scoped to UID
     try {
       final settingsDoc = await _db
           .collection('users')

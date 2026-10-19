@@ -21,14 +21,12 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Observable ValueNotifiers for Flutter UI (0ms instant reactivity)
   final ValueNotifier<List<DailyLog>> logsNotifier = ValueNotifier([]);
   final ValueNotifier<List<FoodItem>> foodsNotifier = ValueNotifier([]);
   final ValueNotifier<List<WeightLog>> weightLogsNotifier = ValueNotifier([]);
   final ValueNotifier<UserProfile> profileNotifier = ValueNotifier(UserProfile());
   final ValueNotifier<Map<String, dynamic>> settingsNotifier = ValueNotifier({});
 
-  // In-memory bucket stores
   final Map<String, Map<String, dynamic>> _monthCache = {}; // "YYYY-MM" -> raw month doc data
   final Map<String, double> _weightCache = {};              // "YYYY-MM-DD" -> weight_kg
   final Map<String, FoodItem> _foodCache = {};              // food_id -> FoodItem
@@ -40,6 +38,7 @@ class FirestoreService {
   int _listenerGeneration = 0;
   int _settingsRevision = 0;
 
+  // Reject late listener callbacks after an account switch or listener restart.
   bool _isActiveSession(String uid, int generation) =>
       _listeningUid == uid && _listenerGeneration == generation && currentUid == uid;
 
@@ -69,7 +68,6 @@ class FirestoreService {
     return a.id.compareTo(b.id);
   }
 
-  // --- Flattening Helpers for UI Streams ---
   void _rebuildFlatLogs() {
     final List<DailyLog> allLogs = [];
 
@@ -107,7 +105,6 @@ class FirestoreService {
     foodsNotifier.value = _foodCache.values.toList();
   }
 
-  // --- Dynamic On-Demand Subscriptions ---
   void ensureMonthSubscribed(String monthKey) {
     if (currentUid == null || monthKey.isEmpty) return;
     final uid = _uid;
@@ -146,7 +143,6 @@ class FirestoreService {
     } catch (_) {}
   }
 
-  // --- Initial Device Hydration ---
   Future<void> _hydrateNewDevice(String uid) async {
     final generation = _listenerGeneration;
     final prefs = await SharedPreferences.getInstance();
@@ -193,7 +189,6 @@ class FirestoreService {
     }
   }
 
-  // --- Realtime Listeners Initialization (Total: 7 Listeners) ---
   void initializeListeners(String uid) {
     cancelListeners();
     _listeningUid = uid;
@@ -201,7 +196,6 @@ class FirestoreService {
 
     _hydrateNewDevice(uid);
 
-    // 1. User Account Stream
     final userSub = _db.collection('users').doc(uid).snapshots().listen((doc) async {
       if (!_isActiveSession(uid, generation)) return;
       if (doc.exists && doc.data() != null) {
@@ -231,7 +225,6 @@ class FirestoreService {
     });
     _subscriptions['user'] = userSub;
 
-    // 2 & 3. Active 2-Month Stream (Current + Previous Month)
     final now = DateTime.now();
     final currentMonthKey = DateFormat('yyyy-MM').format(now);
     final prevMonthDate = DateTime(now.year, now.month - 1, 1);
@@ -240,7 +233,6 @@ class FirestoreService {
     ensureMonthSubscribed(currentMonthKey);
     ensureMonthSubscribed(prevMonthKey);
 
-    // 4. Lifetime Weight Stream
     final weightSub = _db.collection('users').doc(uid).collection('weight_logs').doc('all').snapshots().listen((snap) {
       if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
@@ -255,7 +247,6 @@ class FirestoreService {
     });
     _subscriptions['weights'] = weightSub;
 
-    // 5. Food & Recipe Library Stream
     final foodSub = _db.collection('users').doc(uid).collection('foods').doc('library').snapshots().listen((snap) {
       if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
@@ -271,7 +262,6 @@ class FirestoreService {
     });
     _subscriptions['foods'] = foodSub;
 
-    // 6. User Profile Stream
     final profileSub = _db.collection('users').doc(uid).collection('profile').doc('1').snapshots().listen((doc) {
       if (!_isActiveSession(uid, generation)) return;
       if (doc.exists && doc.data() != null) {
@@ -281,7 +271,6 @@ class FirestoreService {
     });
     _subscriptions['profile'] = profileSub;
 
-    // 7. Settings & Config Stream (Syncs cross-device dismissal & API keys in real time)
     final settingsSub = _db.collection('users').doc(uid).collection('settings').doc('config').snapshots().listen((snap) async {
       if (!_isActiveSession(uid, generation)) return;
       final revision = ++_settingsRevision;
@@ -362,7 +351,6 @@ class FirestoreService {
     return nonFavorites.where((f) => (counts[f.id] ?? 0) > 0).take(limit).toList();
   }
 
-  // --- CRUD: Food Logs (Conflict-Free Map Entries under items.<logId>) ---
   Future<String> addLog(DailyLog log) async {
     final uid = _uid;
     final String id = log.id.isNotEmpty
@@ -516,7 +504,6 @@ class FirestoreService {
     }
   }
 
-  // --- CRUD: Weight Tracker ---
   Future<void> setWeightLog(WeightLog log) async {
     final uid = _uid;
     if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(log.date) ||
@@ -560,7 +547,6 @@ class FirestoreService {
     _rebuildFlatWeights();
   }
 
-  // --- CRUD: Food Library ---
   Future<String> addFood(FoodItem food) async {
     final uid = _uid;
     final String id = food.id.isNotEmpty ? food.id : 'food_${DateTime.now().millisecondsSinceEpoch}';
@@ -624,7 +610,6 @@ class FirestoreService {
     }
   }
 
-  // --- User Profile ---
   Future<void> saveProfile(UserProfile profile) async {
     final uid = _uid;
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());

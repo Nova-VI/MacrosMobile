@@ -20,7 +20,7 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
-  final List<int> _tabHistory = [0]; // Navigation history stack
+  final List<int> _tabHistory = [0];
 
   DateTime _targetLogDate = DateTime.now();
   DailyLog? _editingLog;
@@ -29,7 +29,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (_currentIndex != index) {
       HapticFeedback.lightImpact();
       setState(() {
-        _tabHistory.add(index); // Push to history
+        _tabHistory.add(index);
         _currentIndex = index;
         if (index != 1) {
           _editingLog = null;
@@ -43,7 +43,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     setState(() {
       _targetLogDate = date;
       _editingLog = editLog;
-      _tabHistory.add(1); // Push log tab to history
+      _tabHistory.add(1);
       _currentIndex = 1;
     });
   }
@@ -52,15 +52,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (_tabHistory.length > 1) {
       HapticFeedback.selectionClick();
       setState(() {
-        _tabHistory.removeLast(); // Pop current tab
-        _currentIndex = _tabHistory.last; // Go to previous tab
+        _tabHistory.removeLast();
+        _currentIndex = _tabHistory.last;
         if (_currentIndex != 1) {
           _editingLog = null;
         }
       });
-      return false; // Prevent quitting app
+      return false;
     }
-    return true; // Allow OS to quit app when at root
+    return true;
   }
 
   @override
@@ -103,7 +103,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           bottom: false,
           child: Column(
             children: [
-              // Top App Bar
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Row(
@@ -118,7 +117,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         letterSpacing: -0.6,
                       ),
                     ),
-                    // User Avatar & Profile Access
                     InkWell(
                       onTap: () {
                         HapticFeedback.lightImpact();

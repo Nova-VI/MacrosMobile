@@ -16,9 +16,9 @@ class ApiKeyStore {
       return secureValue;
     }
 
-    // Migrate keys saved by earlier app versions before removing plaintext.
     final legacyValue = prefs.getString(name);
     if (legacyValue == null) return '';
+    // Move keys saved by older versions before clearing their plaintext copies.
     await _storage.write(key: name, value: legacyValue);
     await prefs.remove(name);
     return legacyValue;

@@ -73,7 +73,6 @@ class _ApiKeyGuideSheetState extends State<ApiKeyGuideSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag handle
           Center(
             child: Container(
               width: 40,
@@ -86,7 +85,6 @@ class _ApiKeyGuideSheetState extends State<ApiKeyGuideSheet> {
           ),
           const SizedBox(height: 14),
 
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -107,7 +105,6 @@ class _ApiKeyGuideSheetState extends State<ApiKeyGuideSheet> {
           ),
           const SizedBox(height: 12),
 
-          // Service Switcher Segment
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -136,7 +133,6 @@ class _ApiKeyGuideSheetState extends State<ApiKeyGuideSheet> {
           ),
           const SizedBox(height: 16),
 
-          // Content
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),

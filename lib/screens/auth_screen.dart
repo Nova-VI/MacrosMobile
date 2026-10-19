@@ -139,7 +139,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Google Sign-In
                   OutlinedButton(
                     onPressed: _isLoading ? null : _submitGoogleAuth,
                     style: OutlinedButton.styleFrom(
@@ -183,7 +182,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Email Input
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -196,7 +194,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Password Input
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
@@ -217,7 +214,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Error Display
                   if (_errorMessage != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -234,7 +230,6 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
 
-                  // Primary Button
                   ElevatedButton(
                     onPressed: _isLoading ? null : _submitEmailAuth,
                     child: _isLoading
@@ -247,7 +242,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Toggle Sign In / Sign Up
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

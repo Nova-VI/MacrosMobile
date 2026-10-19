@@ -27,11 +27,9 @@ class RecipesLibraryScreen extends StatefulWidget {
 class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
   late int _selectedSegment;
 
-  // Library State
   final _librarySearchController = TextEditingController();
   String _selectedFilterTag = 'all';
 
-  // Recipe Composer State
   final _recipeNameController = TextEditingController();
   final _recipeUnitController = TextEditingController();
   final _ingredientSearchController = TextEditingController();
@@ -504,7 +502,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     );
   }
 
-  // ==================== TAB 1: FOOD LIBRARY ====================
   Widget _buildLibraryTab() {
     return ValueListenableBuilder<List<FoodItem>>(
       valueListenable: _firestoreService.foodsNotifier,
@@ -878,7 +875,6 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     );
   }
 
-  // ==================== TAB 2: RECIPE COMPOSER ====================
   Widget _buildRecipeComposerTab() {
     final totalMacros = _aggregatedRecipeMacros;
 

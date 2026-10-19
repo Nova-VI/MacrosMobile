@@ -148,7 +148,6 @@ class AdaptiveCoachService {
       final dateKey = DateFormat('yyyy-MM-dd').format(cursor);
       final weightReading = dailyWeightsMap[dateKey];
 
-      // True 14-calendar-day lookback [t-14 ... t-1]
       int validCount = 0;
       double sumValidCals = 0.0;
 
@@ -253,7 +252,7 @@ class AdaptiveCoachService {
     final weeklyKgDelta = (goalOffset * 7.0) / 7700.0;
     final proteinMultiplier = double.tryParse(profile.proteinMultiplier) ?? 2.0;
 
-    // Fix: Resolve true historical starting weight at the phase start date
+    // Anchor the planned weight trajectory to the phase start, not the current profile weight.
     double initialPhaseMass = profile.weight;
     if (activePhase != null) {
       final phaseStartDateKey = activePhase.startDate;
@@ -262,7 +261,6 @@ class AdaptiveCoachService {
       } else if (computedTrendWeights.containsKey(phaseStartDateKey)) {
         initialPhaseMass = computedTrendWeights[phaseStartDateKey]!;
       } else {
-        // Fallback: look for the closest recorded weight on or prior to phase start
         final sortedDates = dailyWeightsMap.keys.toList()..sort();
         String? closestDate;
         for (final d in sortedDates) {

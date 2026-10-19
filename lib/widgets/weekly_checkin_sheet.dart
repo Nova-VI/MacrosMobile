@@ -35,7 +35,6 @@ class WeeklyCheckInSheet extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Drag Handle
           Center(
             child: Container(
               width: 40,
@@ -48,7 +47,6 @@ class WeeklyCheckInSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -74,12 +72,10 @@ class WeeklyCheckInSheet extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Body
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),
               children: [
-                // Metabolism Card
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -111,7 +107,6 @@ class WeeklyCheckInSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
 
-                // Comparison Hero Card
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -165,7 +160,6 @@ class WeeklyCheckInSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // Actions
                 ElevatedButton(
                   onPressed: () async {
                     HapticFeedback.mediumImpact();
