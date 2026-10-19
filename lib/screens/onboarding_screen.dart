@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../models/user_profile.dart';
 import '../models/weight_log.dart';
 import '../services/auth_service.dart';
+import '../services/api_key_store.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/api_key_guide_sheet.dart';
@@ -279,7 +280,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (usdaKey.isNotEmpty && user != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('usda_api_key_${user.uid}', usdaKey);
+      await ApiKeyStore.write(user.uid, 'usda', usdaKey);
       await prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
 
       FirebaseFirestore.instance
@@ -299,8 +300,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final geminiKey = _geminiKeyController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
     if (geminiKey.isNotEmpty && user != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('gemini_api_key_${user.uid}', geminiKey);
+      await ApiKeyStore.write(user.uid, 'gemini', geminiKey);
 
       FirebaseFirestore.instance
           .collection('users')

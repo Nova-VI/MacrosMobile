@@ -6,9 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
 import '../models/nutrition.dart';
+import 'api_key_store.dart';
 
 enum AiAnalysisStatus {
   success,
@@ -49,8 +49,7 @@ class GeminiService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return '';
 
-    final prefs = await SharedPreferences.getInstance();
-    String key = prefs.getString('gemini_api_key_${user.uid}') ?? '';
+    String key = await ApiKeyStore.read(user.uid, 'gemini');
 
     if (key.isEmpty) {
       try {
@@ -62,7 +61,7 @@ class GeminiService {
             .get();
         if (doc.exists && doc.data()?['gemini_api_key'] != null) {
           key = doc.data()!['gemini_api_key'].toString();
-          await prefs.setString('gemini_api_key_${user.uid}', key);
+          await ApiKeyStore.write(user.uid, 'gemini', key);
         }
       } catch (_) {}
     }

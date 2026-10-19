@@ -10,6 +10,7 @@ import '../models/weight_log.dart';
 import '../models/user_profile.dart';
 import 'auth_service.dart';
 import 'adaptive_coach_service.dart';
+import 'api_key_store.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -287,11 +288,11 @@ class FirestoreService {
       final prefs = await SharedPreferences.getInstance();
       if (!_isActiveSession(uid, generation) || revision != _settingsRevision) return;
       if (data['usda_api_key'] is String) {
-        await prefs.setString('usda_api_key_$uid', data['usda_api_key']);
+        await ApiKeyStore.write(uid, 'usda', data['usda_api_key']);
       }
       if (revision != _settingsRevision) return;
       if (data['gemini_api_key'] is String) {
-        await prefs.setString('gemini_api_key_$uid', data['gemini_api_key']);
+        await ApiKeyStore.write(uid, 'gemini', data['gemini_api_key']);
       }
       if (revision != _settingsRevision) return;
       if (data['usda_include_branded'] is bool) {

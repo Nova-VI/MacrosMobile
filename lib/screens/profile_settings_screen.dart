@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
+import '../services/api_key_store.dart';
 import '../services/firestore_service.dart';
 import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
@@ -208,11 +209,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     });
 
     if (user != null) {
+      final usdaKey = await ApiKeyStore.read(user.uid, 'usda');
+      final geminiKey = await ApiKeyStore.read(user.uid, 'gemini');
       final prefs = await SharedPreferences.getInstance();
       if (!mounted || _authService.currentUser?.uid != user.uid) return;
       setState(() {
-        _usdaKeyController.text = prefs.getString('usda_api_key_${user.uid}') ?? '';
-        _geminiKeyController.text = prefs.getString('gemini_api_key_${user.uid}') ?? '';
+        _usdaKeyController.text = usdaKey;
+        _geminiKeyController.text = geminiKey;
         _includeBranded = prefs.getBool('usda_include_branded_${user.uid}') ?? false;
       });
       _applyRemoteSettings();
@@ -515,8 +518,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       }, SetOptions(merge: true));
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != user.uid) return;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('usda_api_key_${user.uid}', usdaKey);
-      await prefs.setString('gemini_api_key_${user.uid}', geminiKey);
+      await ApiKeyStore.write(user.uid, 'usda', usdaKey);
+      await ApiKeyStore.write(user.uid, 'gemini', geminiKey);
       await prefs.setBool('usda_include_branded_${user.uid}', includeBranded);
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != user.uid) return;
       _usdaKeyDirty = false;

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'adaptive_coach_service.dart';
+import 'api_key_store.dart';
 import 'firestore_service.dart';
 
 class AuthService {
@@ -233,10 +234,10 @@ class AuthService {
       if (settingsDoc.exists && settingsDoc.data() != null) {
         final data = settingsDoc.data()!;
         if (data['usda_api_key'] != null) {
-          await prefs.setString('usda_api_key_${user.uid}', data['usda_api_key'].toString());
+          await ApiKeyStore.write(user.uid, 'usda', data['usda_api_key'].toString());
         }
         if (data['gemini_api_key'] != null) {
-          await prefs.setString('gemini_api_key_${user.uid}', data['gemini_api_key'].toString());
+          await ApiKeyStore.write(user.uid, 'gemini', data['gemini_api_key'].toString());
         }
         if (data['usda_include_branded'] != null) {
           await prefs.setBool('usda_include_branded_${user.uid}', data['usda_include_branded'] == true);

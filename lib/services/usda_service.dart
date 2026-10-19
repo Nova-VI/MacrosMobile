@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
 import '../models/nutrition.dart';
 import '../utils/usda_serving.dart';
+import 'api_key_store.dart';
 
 class UsdaService {
   static const String _baseUrl = 'https://api.nal.usda.gov/fdc/v1';
@@ -32,8 +33,7 @@ class UsdaService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return '';
 
-    final prefs = await SharedPreferences.getInstance();
-    String key = prefs.getString('usda_api_key_${user.uid}') ?? '';
+    String key = await ApiKeyStore.read(user.uid, 'usda');
 
     if (key.isEmpty) {
       try {
@@ -45,7 +45,7 @@ class UsdaService {
             .get();
         if (doc.exists && doc.data()?['usda_api_key'] != null) {
           key = doc.data()!['usda_api_key'].toString();
-          await prefs.setString('usda_api_key_${user.uid}', key);
+          await ApiKeyStore.write(user.uid, 'usda', key);
         }
       } catch (_) {}
     }
