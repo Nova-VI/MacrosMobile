@@ -25,4 +25,13 @@ Run `flutter analyze --no-pub` and `flutter test` after changes. Before releasin
 
 ## Android release
 
-The current `release` build type in `android/app/build.gradle.kts` uses the debug signing configuration. Configure a private release keystore and a release signing configuration before distributing a production APK or AAB. Keep the keystore and passwords outside Git. After signing is configured, build with `flutter build appbundle --release` and verify the resulting certificate and package ID before distribution.
+The `release` build type reads signing data from the ignored `android/key.properties` file. Create a private keystore and add these properties before building a distributable artifact:
+
+```properties
+storeFile=C:/absolute/path/to/private/upload-key.jks
+storePassword=<private password>
+keyAlias=<private alias>
+keyPassword=<private password>
+```
+
+Keep the keystore and passwords outside Git. Without those values, a release artifact is not ready for distribution. Build with `flutter build appbundle --release`, then verify the resulting certificate and package ID before distribution.
