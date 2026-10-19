@@ -97,7 +97,7 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet>
       HapticFeedback.lightImpact();
       Navigator.pop(context);
       widget.onNotFound?.call(
-        result.message ?? 'No internet connection. Please check your network.',
+        'Needs internet',
       );
       return;
     }
@@ -107,7 +107,7 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet>
     HapticFeedback.lightImpact();
     Navigator.pop(context);
     widget.onNotFound?.call(
-      result.message ?? 'Product not found for barcode "$barcode".',
+      result.status == OpenFoodFactsStatus.notFound ? 'Food not found' : 'Scan failed',
     );
   }
 

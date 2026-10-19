@@ -1,3 +1,4 @@
+import '../widgets/app_toast.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -180,6 +181,10 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
   void _initEditMode(DailyLog log) {
     _editingLogId = log.id;
+    final macroCalories = log.macros.proteinG * 4 +
+        log.macros.carbsG * 4 + log.macros.fatG * 9;
+    _isManualCalories = log.macros.calories > 0 &&
+        (log.macros.calories - macroCalories).abs() > 0.5;
     _isLibraryBound = true;
     _selectedEmoji = log.emoji.isNotEmpty ? log.emoji : '🍽️';
     _nameController.text = log.foodName;
@@ -427,6 +432,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       source: 'custom',
       servingSizeG: baseG,
       baseUnit: food.baseUnit,
+      density: food.density,
       servingName: food.servingName,
       emoji: _selectedEmoji,
       macros: MacroNutrients(
@@ -438,7 +444,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       micros: mic.scale(servings > 0 ? 1.0 / servings : 1.0),
     );
 
-    _showToast('Loaded "${food.name}" into Quick Log');
+    _showToast('Loaded');
     setState(() {});
     _updateFloatingButtonVisibility();
   }
@@ -482,6 +488,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         source: food.source,
         servingSizeG: baseG,
         baseUnit: food.baseUnit,
+        density: food.density,
         servingName: food.servingName,
         emoji: _selectedEmoji,
         macros: const MacroNutrients(),
@@ -489,7 +496,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       );
 
       _showToast(
-        'Found "${food.name}", but nutrition facts are missing. Please enter macros manually.',
+        'Found, but nutrition facts are missing. Please enter macros manually.',
         isError: true,
       );
     } else {
@@ -522,6 +529,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         source: food.source,
         servingSizeG: baseG,
         baseUnit: food.baseUnit,
+        density: food.density,
         servingName: food.servingName,
         emoji: _selectedEmoji,
         macros: MacroNutrients(
@@ -533,7 +541,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         micros: mic,
       );
 
-      _showToast('Found "${food.name}"');
+      _showToast('Found');
     }
 
     setState(() {});
@@ -692,6 +700,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
           usdaFdcId: _currentBaseFood!.usdaFdcId,
           servingSizeG: newBase,
           baseUnit: _selectedBaseUnit,
+          density: _currentBaseFood!.density,
           servingName: _servingUnitController.text.trim(),
           emoji: _selectedEmoji,
           macros: _currentBaseFood!.macros.scale(ratio),
@@ -757,6 +766,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       source: _currentBaseFood?.source ?? 'custom',
       servingSizeG: double.tryParse(_servingSizeController.text) ?? 100.0,
       baseUnit: _selectedBaseUnit,
+      density: _currentBaseFood?.density ?? 1.0,
       servingName: _servingUnitController.text.trim(),
       emoji: _selectedEmoji,
       macros: MacroNutrients(proteinG: baseP, carbsG: baseC, fatG: baseF, calories: baseCal),
@@ -807,7 +817,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     if (!_validateFoodInputs()) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      _showToast('Food name is required to save to library.', isError: true);
+      _showToast('Enter a food name', isError: true);
       return;
     }
 
@@ -825,6 +835,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       usdaFdcId: _currentBaseFood?.usdaFdcId,
       servingSizeG: baseG,
       baseUnit: _selectedBaseUnit,
+      density: _currentBaseFood?.density ?? 1.0,
       servingName: _servingUnitController.text.trim(),
       emoji: _selectedEmoji,
       macros: MacroNutrients(
@@ -840,13 +851,13 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       final id = await _firestoreService.addFood(item);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      _showToast('"$name" saved to library!');
+      _showToast('Saved');
       _resetToNewQuickLog();
       if (_selectedEmoji == '🍽️') {
         _handleBackgroundAiEmoji(id, null, name);
       }
     } catch (error) {
-      if (mounted) _showToast('Could not save food: $error', isError: true);
+      if (mounted) _showToast('Could not save', isError: true);
     }
   }
 
@@ -870,7 +881,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     if (!_validateFoodInputs()) return;
     final name = _nameController.text.trim();
     if (name.isEmpty && _saveToLibrary) {
-      _showToast('Food name is required to save to library.', isError: true);
+      _showToast('Enter a food name', isError: true);
       return;
     }
 
@@ -898,6 +909,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
         usdaFdcId: _currentBaseFood?.usdaFdcId,
         servingSizeG: baseG,
         baseUnit: _selectedBaseUnit,
+        density: _currentBaseFood?.density ?? 1.0,
         servingName: _servingUnitController.text.trim(),
         emoji: finalEmoji,
         macros: MacroNutrients(
@@ -940,20 +952,20 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
       await _firestoreService.updateLog(_editingLogId!, logPayload.toMap());
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      _showToast('Daily log updated!');
+      _showToast('Updated');
       widget.onLogCompleted();
     } else {
       final newLogId = await _firestoreService.addLog(logPayload);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      _showToast('"$displayName" logged successfully!');
+      _showToast('Saved');
       _resetToNewQuickLog();
       if (triggerAiEmoji) {
         _handleBackgroundAiEmoji(foodId, newLogId, displayName);
       }
     }
     } catch (error) {
-      if (mounted) _showToast('Could not save log: $error', isError: true);
+      if (mounted) _showToast('Could not save', isError: true);
     }
   }
 
@@ -1009,12 +1021,12 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
                     try {
                       await _firestoreService.deleteLog(_editingLogId!, date: dateStr);
                     } catch (error) {
-                      if (mounted) _showToast('Could not delete log: $error', isError: true);
+                      if (mounted) _showToast('Could not delete', isError: true);
                       return;
                     }
                     if (!mounted) return;
                     HapticFeedback.mediumImpact();
-                    _showToast('Daily log entry deleted.');
+                    _showToast('Deleted');
                     widget.onLogCompleted();
                   },
                   child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -1039,24 +1051,8 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     }
   }
 
-  void _showToast(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: isError ? AppColors.danger : AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isError ? AppColors.danger : AppColors.primary),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
+  void _showToast(String message, {bool isError = false}) =>
+      showAppToast(context, message, isError: isError);
 
   @override
   Widget build(BuildContext context) {

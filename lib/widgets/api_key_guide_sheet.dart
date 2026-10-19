@@ -1,3 +1,4 @@
+import 'app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
@@ -40,22 +41,7 @@ class _ApiKeyGuideSheetState extends State<ApiKeyGuideSheet> {
   void _copyToClipboard(String text, String label) {
     Clipboard.setData(ClipboardData(text: text));
     HapticFeedback.mediumImpact();
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$label copied to clipboard',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: AppColors.primary),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    showAppToast(context, 'Copied');
   }
 
   @override

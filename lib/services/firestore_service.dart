@@ -26,6 +26,7 @@ class FirestoreService {
   final ValueNotifier<List<WeightLog>> weightLogsNotifier = ValueNotifier([]);
   final ValueNotifier<UserProfile> profileNotifier = ValueNotifier(UserProfile());
   final ValueNotifier<Map<String, dynamic>> settingsNotifier = ValueNotifier({});
+  final ValueNotifier<String?> syncErrorNotifier = ValueNotifier(null);
 
   final Map<String, Map<String, dynamic>> _monthCache = {}; // "YYYY-MM" -> raw month doc data
   final Map<String, double> _weightCache = {};              // "YYYY-MM-DD" -> weight_kg
@@ -37,6 +38,7 @@ class FirestoreService {
   String? _listeningUid;
   int _listenerGeneration = 0;
   int _settingsRevision = 0;
+  double? _profileWeightRepair;
 
   // Reject late listener callbacks after an account switch or listener restart.
   bool _isActiveSession(String uid, int generation) =>
@@ -48,6 +50,48 @@ class FirestoreService {
     final uid = currentUid;
     if (uid == null) throw Exception('No authenticated user found');
     return uid;
+  }
+
+  // Firestore's write future waits for the server, including while offline.
+  // Submit it to the SDK's persistent queue and let the UI use the local state.
+  void _queueWrite(Future<void> write, String uid) {
+    final generation = _listenerGeneration;
+    unawaited(write.catchError((Object error, StackTrace stack) {
+      if (currentUid != uid || generation != _listenerGeneration) return;
+      if (kDebugMode) debugPrint('Firestore write failed: $error');
+      syncErrorNotifier.value = null;
+      syncErrorNotifier.value = 'Sync failed. Please retry.';
+    }));
+  }
+
+  Future<void> saveSettings(Map<String, dynamic> changes) async {
+    final uid = _uid;
+    final prefs = await SharedPreferences.getInstance();
+    for (final provider in ['usda', 'gemini']) {
+      final key = changes['${provider}_api_key'];
+      if (key is String) await ApiKeyStore.write(uid, provider, key);
+    }
+    final branded = changes['usda_include_branded'];
+    if (branded is bool) await prefs.setBool('usda_include_branded_$uid', branded);
+    if (changes.containsKey('dismissed_checkin_date')) {
+      final date = changes['dismissed_checkin_date'];
+      if (date is String && date.isNotEmpty) {
+        await prefs.setString('dismissed_checkin_date_$uid', date);
+      } else {
+        await prefs.remove('dismissed_checkin_date_$uid');
+      }
+    }
+    if (currentUid != uid) return;
+    await ThemeManager.applyRemote(uid, changes);
+    if (currentUid != uid) return;
+    _queueWrite(_db.collection('users').doc(uid).collection('settings').doc('config')
+        .set(changes, SetOptions(merge: true)), uid);
+    settingsNotifier.value = {...settingsNotifier.value, ...changes};
+  }
+
+  Future<void> saveUserFields(Map<String, dynamic> changes) async {
+    final uid = _uid;
+    _queueWrite(_db.collection('users').doc(uid).set(changes, SetOptions(merge: true)), uid);
   }
 
   static int compareLogsChronologically(DailyLog a, DailyLog b) {
@@ -98,7 +142,29 @@ class FirestoreService {
     }).toList();
     allWeights.sort((a, b) => a.date.compareTo(b.date));
     weightLogsNotifier.value = allWeights;
+    _alignProfileWeight();
     AdaptiveCoachService().recomputeAndEvaluate();
+  }
+
+  // Reconcile again after remote snapshots so concurrent date edits cannot
+  // leave the profile pointing at an older weight after reconnecting.
+  void _alignProfileWeight() {
+    if (_weightCache.isEmpty || currentUid == null) return;
+    final dates = _weightCache.keys.toList()..sort();
+    final weight = _weightCache[dates.last]!;
+    if (profileNotifier.value.weight == weight) return;
+    profileNotifier.value = UserProfile.fromFirestore({...profileNotifier.value.toMap(), 'weight': weight});
+    if (_profileWeightRepair == weight) return;
+    _profileWeightRepair = weight;
+    final uid = _uid;
+    final generation = _listenerGeneration;
+    final repair = _db.collection('users').doc(uid).collection('profile').doc('1')
+        .set({'weight': weight}, SetOptions(merge: true));
+    _queueWrite(repair.then((_) {
+      if (generation == _listenerGeneration && _profileWeightRepair == weight) {
+        _profileWeightRepair = null;
+      }
+    }), uid);
   }
 
   void _rebuildFlatFoods() {
@@ -117,8 +183,10 @@ class FirestoreService {
       if (!_isActiveSession(uid, generation)) return;
       if (snap.exists && snap.data() != null) {
         _monthCache[monthKey] = snap.data()!;
-        _rebuildFlatLogs();
+      } else {
+        _monthCache.remove(monthKey);
       }
+      _rebuildFlatLogs();
     });
 
     _subscriptions[listenerKey] = sub;
@@ -127,20 +195,33 @@ class FirestoreService {
   Future<void> ensureAllMonthsLoaded() async {
     if (currentUid == null) return;
     if (_allMonthsLoadedThisSession) return;
+    _allMonthsLoadedThisSession = true;
     final uid = _uid;
     final generation = _listenerGeneration;
+    final query = _db.collection('users').doc(uid).collection('logs');
     try {
-      final snap = await _db.collection('users').doc(uid).collection('logs').get();
+      final snap = await query.get(const GetOptions(source: Source.cache));
       if (!_isActiveSession(uid, generation)) return;
       for (final doc in snap.docs) {
         if (RegExp(r'^\d{4}-\d{2}$').hasMatch(doc.id)) {
           _monthCache[doc.id] = doc.data();
-          ensureMonthSubscribed(doc.id);
         }
       }
-      _allMonthsLoadedThisSession = true;
       _rebuildFlatLogs();
     } catch (_) {}
+    if (!_isActiveSession(uid, generation)) return;
+    // Cached history is available immediately. The live query keeps it current
+    // after reconnecting, including backdated additions and removed months.
+    _subscriptions['all_months'] = query.snapshots().listen((snap) {
+      if (!_isActiveSession(uid, generation)) return;
+      _monthCache.clear();
+      for (final doc in snap.docs) {
+        if (RegExp(r'^\d{4}-\d{2}$').hasMatch(doc.id)) {
+          _monthCache[doc.id] = doc.data();
+        }
+      }
+      _rebuildFlatLogs();
+    });
   }
 
   Future<void> _hydrateNewDevice(String uid) async {
@@ -196,12 +277,17 @@ class FirestoreService {
 
     _hydrateNewDevice(uid);
 
-    final userSub = _db.collection('users').doc(uid).snapshots().listen((doc) async {
+    final userSub = _db.collection('users').doc(uid).snapshots(includeMetadataChanges: true).listen((doc) async {
       if (!_isActiveSession(uid, generation)) return;
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         final remoteName = data['displayName']?.toString() ?? '';
         final remoteCompleted = data['onboarding_completed'] == true;
+        // Auth profile APIs do not queue offline. The durable user document is
+        // the source of truth; mirror it once the server acknowledges it.
+        if (!doc.metadata.isFromCache && !doc.metadata.hasPendingWrites) {
+          unawaited(AuthService().syncAuthProfile(uid, data));
+        }
 
         final prefs = await SharedPreferences.getInstance();
         if (!_isActiveSession(uid, generation)) return;
@@ -266,6 +352,7 @@ class FirestoreService {
       if (!_isActiveSession(uid, generation)) return;
       if (doc.exists && doc.data() != null) {
         profileNotifier.value = UserProfile.fromFirestore(doc.data());
+        _alignProfileWeight();
         AdaptiveCoachService().recomputeAndEvaluate();
       }
     });
@@ -308,6 +395,7 @@ class FirestoreService {
     _listenerGeneration++;
     _settingsRevision++;
     _listeningUid = null;
+    _profileWeightRepair = null;
     for (final sub in _subscriptions.values) {
       sub.cancel();
     }
@@ -323,6 +411,7 @@ class FirestoreService {
     weightLogsNotifier.value = [];
     profileNotifier.value = UserProfile();
     settingsNotifier.value = {};
+    syncErrorNotifier.value = null;
   }
 
   List<DailyLog> getLogsForDate(String date) {
@@ -374,10 +463,11 @@ class FirestoreService {
 
     final monthKey = log.date.substring(0, 7);
 
-    await _db.collection('users').doc(uid).collection('logs').doc(monthKey).set({
+    ensureMonthSubscribed(monthKey);
+    _queueWrite(_db.collection('users').doc(uid).collection('logs').doc(monthKey).set({
       'month': monthKey,
       'items': {id: resolvedLog.toMap()},
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)), uid);
     if (currentUid != uid) return id;
 
     if (!_monthCache.containsKey(monthKey)) {
@@ -421,7 +511,8 @@ class FirestoreService {
         final newRef = _db.collection('users').doc(uid).collection('logs').doc(newMonthKey);
         batch.update(oldRef, {FieldPath(['items', id]): FieldValue.delete()});
         batch.set(newRef, {'month': newMonthKey, 'items': {id: updatedMap}}, SetOptions(merge: true));
-        await batch.commit();
+        ensureMonthSubscribed(newMonthKey);
+        _queueWrite(batch.commit(), uid);
         if (currentUid != uid) return;
         (_monthCache[foundMonthKey]?['items'] as Map?)?.remove(id);
 
@@ -433,9 +524,9 @@ class FirestoreService {
         _rebuildFlatLogs();
 
       } else {
-        await _db.collection('users').doc(uid).collection('logs').doc(foundMonthKey).set({
+        _queueWrite(_db.collection('users').doc(uid).collection('logs').doc(foundMonthKey).set({
           'items': {id: updatedMap},
-        }, SetOptions(merge: true));
+        }, SetOptions(merge: true)), uid);
         if (currentUid != uid) return;
         (_monthCache[foundMonthKey]?['items'] as Map)[id] = updatedMap;
         _rebuildFlatLogs();
@@ -494,7 +585,7 @@ class FirestoreService {
 
     if (foundMonthKey != null) {
       final docRef = _db.collection('users').doc(uid).collection('logs').doc(foundMonthKey);
-      await docRef.update({FieldPath(['items', targetKey]): FieldValue.delete()});
+      _queueWrite(docRef.update({FieldPath(['items', targetKey]): FieldValue.delete()}), uid);
       if (currentUid == uid) {
         (_monthCache[foundMonthKey]?['items'] as Map?)?.remove(targetKey);
         _rebuildFlatLogs();
@@ -512,17 +603,16 @@ class FirestoreService {
     }
     final weightsRef = _db.collection('users').doc(uid).collection('weight_logs').doc('all');
     final profileRef = _db.collection('users').doc(uid).collection('profile').doc('1');
-    await _db.runTransaction((transaction) async {
-      final snapshot = await transaction.get(weightsRef);
-      final entries = Map<String, dynamic>.from(snapshot.data()?['entries'] as Map? ?? {});
-      entries[log.date] = log.weightKg;
-      transaction.set(weightsRef, {'entries': entries});
-      final latestDate = entries.keys.toList()..sort();
-      transaction.set(profileRef, {'weight': (entries[latestDate.last] as num).toDouble()},
-          SetOptions(merge: true));
-    });
-    if (currentUid != uid) return;
+    final entries = {..._weightCache, log.date: log.weightKg};
+    final dates = entries.keys.toList()..sort();
+    final latestWeight = entries[dates.last]!;
+    final batch = _db.batch();
+    // Merge only this date; replacing the whole map loses other devices' edits.
+    batch.set(weightsRef, {'entries': {log.date: log.weightKg}}, SetOptions(merge: true));
+    batch.set(profileRef, {'weight': latestWeight}, SetOptions(merge: true));
+    _queueWrite(batch.commit(), uid);
     _weightCache[log.date] = log.weightKg;
+    profileNotifier.value = UserProfile.fromFirestore({...profileNotifier.value.toMap(), 'weight': latestWeight});
     _rebuildFlatWeights();
   }
 
@@ -530,19 +620,17 @@ class FirestoreService {
     final uid = _uid;
     final weightsRef = _db.collection('users').doc(uid).collection('weight_logs').doc('all');
     final profileRef = _db.collection('users').doc(uid).collection('profile').doc('1');
-    await _db.runTransaction((transaction) async {
-      final snapshot = await transaction.get(weightsRef);
-      final entries = Map<String, dynamic>.from(snapshot.data()?['entries'] as Map? ?? {});
-      if (!entries.containsKey(date)) throw StateError('Weight entry no longer exists.');
-      entries.remove(date);
-      transaction.set(weightsRef, {'entries': entries});
-      final dates = entries.keys.toList()..sort();
-      if (dates.isNotEmpty) {
-        transaction.set(profileRef, {'weight': (entries[dates.last] as num).toDouble()},
-            SetOptions(merge: true));
-      }
-    });
-    if (currentUid != uid) return;
+    if (!_weightCache.containsKey(date)) throw StateError('Weight entry no longer exists.');
+    final entries = {..._weightCache}..remove(date);
+    final dates = entries.keys.toList()..sort();
+    final batch = _db.batch();
+    batch.update(weightsRef, {FieldPath(['entries', date]): FieldValue.delete()});
+    if (dates.isNotEmpty) {
+      final latestWeight = entries[dates.last]!;
+      batch.set(profileRef, {'weight': latestWeight}, SetOptions(merge: true));
+      profileNotifier.value = UserProfile.fromFirestore({...profileNotifier.value.toMap(), 'weight': latestWeight});
+    }
+    _queueWrite(batch.commit(), uid);
     _weightCache.remove(date);
     _rebuildFlatWeights();
   }
@@ -566,11 +654,11 @@ class FirestoreService {
       ingredients: food.ingredients,
     );
 
-    await _db.collection('users').doc(uid).collection('foods').doc('library').set({
+    _queueWrite(_db.collection('users').doc(uid).collection('foods').doc('library').set({
       'items': {
         id: resolvedFood.toMap(),
       }
-    }, SetOptions(merge: true));
+    }, SetOptions(merge: true)), uid);
     if (currentUid == uid) {
       _foodCache[id] = resolvedFood;
       _rebuildFlatFoods();
@@ -585,11 +673,11 @@ class FirestoreService {
     if (existing != null) {
       final map = existing.toMap()..addAll(changes);
       final updated = FoodItem.fromFirestore(id, map);
-      await _db.collection('users').doc(uid).collection('foods').doc('library').set({
+      _queueWrite(_db.collection('users').doc(uid).collection('foods').doc('library').set({
         'items': {
           id: updated.toMap(),
         }
-      }, SetOptions(merge: true));
+      }, SetOptions(merge: true)), uid);
       if (currentUid == uid) {
         _foodCache[id] = updated;
         _rebuildFlatFoods();
@@ -601,9 +689,9 @@ class FirestoreService {
 
   Future<void> deleteFood(String id) async {
     final uid = _uid;
-    await _db.collection('users').doc(uid).collection('foods').doc('library').update({
+    _queueWrite(_db.collection('users').doc(uid).collection('foods').doc('library').update({
       FieldPath(['items', id]): FieldValue.delete(),
-    });
+    }), uid);
     if (currentUid == uid) {
       _foodCache.remove(id);
       _rebuildFlatFoods();
@@ -635,10 +723,10 @@ class FirestoreService {
       goalPhases: currentPhases,
     );
 
-    await _db.collection('users').doc(uid).collection('profile').doc('1').set(
+    _queueWrite(_db.collection('users').doc(uid).collection('profile').doc('1').set(
       updatedProfile.toMap(),
       SetOptions(merge: true),
-    );
+    ), uid);
     if (currentUid == uid) profileNotifier.value = updatedProfile;
   }
 }

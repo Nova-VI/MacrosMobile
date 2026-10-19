@@ -65,14 +65,33 @@ class AuthService {
   }
 
   void _syncDisplayNameToRemote(User user, String newName) async {
+    if (_auth.currentUser?.uid != user.uid) return;
     try {
-      _db.collection('users').doc(user.uid).set({
+      await FirestoreService().saveUserFields({
         'displayName': newName,
         'updated_at': DateTime.now().toIso8601String(),
-      }, SetOptions(merge: true));
+      });
 
       await user.updateDisplayName(newName).timeout(const Duration(seconds: 4));
     } catch (_) {}
+  }
+
+  Future<void> syncAuthProfile(String uid, Map<String, dynamic> data) async {
+    final user = _auth.currentUser;
+    if (user == null || user.uid != uid) return;
+    try {
+      final name = data['displayName'];
+      if (name is String && name.isNotEmpty && name != user.displayName) {
+        await user.updateDisplayName(name).timeout(const Duration(seconds: 4));
+      }
+      if (_auth.currentUser?.uid != uid) return;
+      final photo = data['photoURL'];
+      if (photo is String && photo != user.photoURL) {
+        await user.updatePhotoURL(photo).timeout(const Duration(seconds: 4));
+      }
+    } catch (_) {
+      // Retry on a later server snapshot or the next session.
+    }
   }
 
   Future<void> setOnboardingCompleted(bool completed) async {
@@ -83,11 +102,12 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_completed_${user.uid}', completed);
+    if (_auth.currentUser?.uid != user.uid) return;
 
-    _db.collection('users').doc(user.uid).set({
+    await FirestoreService().saveUserFields({
       'onboarding_completed': completed,
       'onboarding_completed_at': DateTime.now().toIso8601String(),
-    }, SetOptions(merge: true));
+    });
   }
 
   Future<bool> checkIsOnboardingCompleted(String uid) async {
@@ -218,14 +238,12 @@ class AuthService {
       await prefs.setString('cached_user_photo_${user.uid}', photo);
     }
 
-    final userRef = _db.collection('users').doc(user.uid);
-    userRef.set({
+    if (_auth.currentUser?.uid != user.uid) return;
+    await FirestoreService().saveUserFields({
       'uid': user.uid,
       'email': user.email ?? '',
-      'displayName': name,
-      'photoURL': photo,
       'last_login': DateTime.now().toIso8601String(),
-    }, SetOptions(merge: true));
+    });
 
     try {
       final settingsDoc = await _db

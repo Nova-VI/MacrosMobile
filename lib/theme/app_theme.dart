@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firestore_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -54,10 +54,11 @@ class ThemeManager {
     HapticFeedback.lightImpact();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('theme_accent_$uid', color.toARGB32());
+    if (_activeUid != uid || FirebaseAuth.instance.currentUser?.uid != uid) return;
     try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
+      await FirestoreService().saveSettings({
         'app_accent_color': color.toARGB32(),
-      }, SetOptions(merge: true));
+      });
     } catch (_) {}
   }
 
@@ -71,11 +72,12 @@ class ThemeManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('theme_bg_$uid', bg.toARGB32());
     await prefs.setInt('theme_surface_$uid', surface.toARGB32());
+    if (_activeUid != uid || FirebaseAuth.instance.currentUser?.uid != uid) return;
     try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
+      await FirestoreService().saveSettings({
         'app_background_color': bg.toARGB32(),
         'app_surface_color': surface.toARGB32(),
-      }, SetOptions(merge: true));
+      });
     } catch (_) {}
   }
 

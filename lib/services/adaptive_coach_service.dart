@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_profile.dart';
 import 'adaptive_coach_engine.dart';
 import 'firestore_service.dart';
@@ -405,12 +404,14 @@ class AdaptiveCoachService {
     if (uid != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('dismissed_checkin_date_$uid');
+      if (uid != _firestoreService.currentUid) return;
 
-      FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
+      await _firestoreService.saveSettings({
         'dismissed_checkin_date': null,
-      }, SetOptions(merge: true));
+      });
     }
 
+    if (uid != _firestoreService.currentUid) return;
     await _firestoreService.saveProfile(updatedProfile);
   }
 
@@ -424,10 +425,11 @@ class AdaptiveCoachService {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('dismissed_checkin_date_$uid', proposal.date);
+      if (uid != _firestoreService.currentUid) return;
 
-      FirebaseFirestore.instance.collection('users').doc(uid).collection('settings').doc('config').set({
+      await _firestoreService.saveSettings({
         'dismissed_checkin_date': proposal.date,
-      }, SetOptions(merge: true));
+      });
     }
   }
 }

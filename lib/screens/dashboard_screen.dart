@@ -1,3 +1,4 @@
+import '../widgets/app_toast.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -316,30 +317,13 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
       await FirestoreService().addLog(newLog);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not copy log: $error')),
-        );
+        showAppToast(context, 'Could not copy', isError: true);
       }
       return;
     }
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Copied "${log.foodName}" to Today!',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: AppColors.primary),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    showAppToast(context, 'Copied');
   }
 
   @override
@@ -812,9 +796,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
             return true;
           } catch (error) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Could not delete log: $error')),
-              );
+              showAppToast(context, 'Could not delete', isError: true);
             }
             return false;
           }

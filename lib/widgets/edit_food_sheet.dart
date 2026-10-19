@@ -1,3 +1,4 @@
+import 'app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/food_item.dart';
@@ -191,9 +192,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                       await FirestoreService().deleteFood(widget.food.id);
                     } catch (error) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Could not delete food: $error')),
-                        );
+                        showAppToast(context, 'Could not delete', isError: true);
                       }
                       return;
                     }
@@ -229,7 +228,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       },
     );
     if (validationError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(validationError)));
+      showAppToast(context, validationError, isError: true);
       return;
     }
 
@@ -275,9 +274,7 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
       await FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save food: $error')),
-        );
+        showAppToast(context, 'Could not save', isError: true);
       }
       return;
     }

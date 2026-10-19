@@ -1,8 +1,8 @@
+import '../widgets/app_toast.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -316,11 +316,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         final data = json.decode(resBody);
         final secureUrl = data['secure_url'] as String;
 
-        await user.updatePhotoURL(secureUrl);
-        if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'photoURL': secureUrl,
-        }, SetOptions(merge: true));
+        await _firestoreService.saveUserFields({'photoURL': secureUrl});
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cached_user_photo_$uid', secureUrl);
         if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
 
         setState(() {
@@ -328,12 +326,12 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         });
 
         HapticFeedback.mediumImpact();
-        _showToast('Profile photo updated!');
+        _showToast('Updated');
       } else {
-        _showToast('Photo upload failed.', isError: true);
+        _showToast('Upload failed', isError: true);
       }
     } catch (_) {
-      _showToast('Connection error uploading photo.', isError: true);
+      _showToast('Needs internet', isError: true);
     } finally {
       if (mounted) setState(() => _isUploadingPhoto = false);
     }
@@ -410,7 +408,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     if (trimmed.isEmpty || trimmed == currentName.trim()) return;
 
     _authService.updateDisplayName(trimmed);
-    _showToast('Name updated to "$trimmed"');
+    _showToast('Updated');
   }
 
   Future<void> _saveProfileAndGoals() async {
@@ -493,9 +491,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
       await _firestoreService.saveProfile(payload);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
-      _showToast('Target goals saved successfully!');
+      _showToast('Saved');
     } catch (error) {
-      if (mounted) _showToast('Could not save goals: $error', isError: true);
+      if (mounted) _showToast('Could not save', isError: true);
     }
   }
 
@@ -506,44 +504,26 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('settings').doc('config').set({
+      await _firestoreService.saveSettings({
         'usda_api_key': usdaKey,
         'gemini_api_key': geminiKey,
         'usda_include_branded': includeBranded,
-      }, SetOptions(merge: true));
-      if (!mounted || FirebaseAuth.instance.currentUser?.uid != user.uid) return;
-      final prefs = await SharedPreferences.getInstance();
-      await ApiKeyStore.write(user.uid, 'usda', usdaKey);
-      await ApiKeyStore.write(user.uid, 'gemini', geminiKey);
-      await prefs.setBool('usda_include_branded_${user.uid}', includeBranded);
+      });
       if (!mounted || FirebaseAuth.instance.currentUser?.uid != user.uid) return;
       _usdaKeyDirty = false;
       _geminiKeyDirty = false;
       _brandedDirty = false;
       HapticFeedback.mediumImpact();
-      _showToast('API credentials saved!');
+      _showToast('Saved');
     } catch (_) {
       if (mounted && FirebaseAuth.instance.currentUser?.uid == user.uid) {
-        _showToast('Could not save API credentials.', isError: true);
+        _showToast('Could not save', isError: true);
       }
     }
   }
 
-  void _showToast(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        backgroundColor: isError ? AppColors.danger : AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isError ? AppColors.danger : AppColors.primary),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
+  void _showToast(String message, {bool isError = false}) =>
+      showAppToast(context, message, isError: isError);
 
   @override
   Widget build(BuildContext context) {

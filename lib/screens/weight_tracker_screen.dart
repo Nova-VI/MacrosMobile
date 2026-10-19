@@ -1,3 +1,4 @@
+import '../widgets/app_toast.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -48,7 +49,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     if (logs.isNotEmpty) {
       _openEditWeightModal(logs.last);
     } else {
-      _showToast('No prior weight logs found. Enter your current weight below.');
+      _showToast('No weight logs yet');
     }
   }
 
@@ -117,7 +118,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   Future<void> _submitWeightLog() async {
     final weight = double.tryParse(_weightInputController.text);
     if (weight == null || weight <= 0) {
-      _showToast('Please enter a valid body weight.', isError: true);
+      _showToast('Enter a valid weight', isError: true);
       return;
     }
 
@@ -126,36 +127,20 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     try {
       await _firestoreService.setWeightLog(WeightLog(date: dateKey, weightKg: weight));
     } catch (error) {
-      if (mounted) _showToast('Could not save weight: $error', isError: true);
+      if (mounted) _showToast('Could not save', isError: true);
       return;
     }
     if (!mounted) return;
     HapticFeedback.mediumImpact();
-    _showToast('Weight logged for ${DateFormat('MMM d').format(_selectedLogDate)}!');
+    _showToast('Saved');
     _weightInputController.clear();
     setState(() {
       _selectedLogDate = DateTime.now();
     });
   }
 
-  void _showToast(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: isError ? AppColors.danger : AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isError ? AppColors.danger : AppColors.primary),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
+  void _showToast(String message, {bool isError = false}) =>
+      showAppToast(context, message, isError: isError);
 
   List<WeightLog> _filterLogs(List<WeightLog> allLogs) {
     if (allLogs.isEmpty) return [];
@@ -899,12 +884,12 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                       try {
                         await _firestoreService.setWeightLog(WeightLog(date: log.date, weightKg: newW));
                       } catch (error) {
-                        if (mounted) _showToast('Could not update weight: $error', isError: true);
+                        if (mounted) _showToast('Could not update', isError: true);
                         return;
                       }
                       if (!mounted) return;
                       HapticFeedback.mediumImpact();
-                      _showToast('Weight log updated!');
+                      _showToast('Updated');
                     }
                   },
                   child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -957,12 +942,12 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     try {
                       await _firestoreService.deleteWeightLog(log.date);
                     } catch (error) {
-                      if (mounted) _showToast('Could not delete weight: $error', isError: true);
+                      if (mounted) _showToast('Could not delete', isError: true);
                       return;
                     }
                     if (!mounted) return;
                     HapticFeedback.mediumImpact();
-                    _showToast('Weight log deleted.');
+                    _showToast('Deleted');
                   },
                   child: const Text('Delete'),
                 ),

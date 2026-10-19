@@ -1,8 +1,10 @@
+import '../widgets/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/daily_log.dart';
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import 'dashboard_screen.dart';
 import 'log_food_screen.dart';
@@ -24,6 +26,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   DateTime _targetLogDate = DateTime.now();
   DailyLog? _editingLog;
+
+  @override
+  void initState() {
+    super.initState();
+    FirestoreService().syncErrorNotifier.addListener(_showSyncError);
+  }
+
+  @override
+  void dispose() {
+    FirestoreService().syncErrorNotifier.removeListener(_showSyncError);
+    super.dispose();
+  }
+
+  void _showSyncError() {
+    final message = FirestoreService().syncErrorNotifier.value;
+    if (!mounted || message == null) return;
+    showAppToast(context, message, isError: true);
+  }
 
   void _onTabSelected(int index) {
     if (_currentIndex != index) {
@@ -189,55 +209,59 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: Container(
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          height: 64,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: AppColors.border, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildCircularNavItem(
-                index: 0,
-                icon: Icons.home_outlined,
-                selectedIcon: Icons.home_rounded,
-                tooltip: 'Home',
-              ),
-              _buildCircularNavItem(
-                index: 1,
-                icon: Icons.add_circle_outline_rounded,
-                selectedIcon: Icons.add_circle_rounded,
-                tooltip: 'Log Food',
-              ),
-              _buildCircularNavItem(
-                index: 2,
-                icon: Icons.restaurant_menu_rounded,
-                selectedIcon: Icons.restaurant_rounded,
-                tooltip: 'Foods & Recipes',
-              ),
-              _buildCircularNavItem(
-                index: 3,
-                icon: Icons.monitor_weight_outlined,
-                selectedIcon: Icons.monitor_weight_rounded,
-                tooltip: 'Weight Tracker',
-              ),
-              _buildCircularNavItem(
-                index: 4,
-                icon: Icons.insights_rounded,
-                selectedIcon: Icons.analytics_rounded,
-                tooltip: 'Stats & Insights',
-              ),
-            ],
+        bottomNavigationBar: SafeArea(
+          top: false,
+          maintainBottomViewPadding: true,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: AppColors.border, width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildCircularNavItem(
+                  index: 0,
+                  icon: Icons.home_outlined,
+                  selectedIcon: Icons.home_rounded,
+                  tooltip: 'Home',
+                ),
+                _buildCircularNavItem(
+                  index: 1,
+                  icon: Icons.add_circle_outline_rounded,
+                  selectedIcon: Icons.add_circle_rounded,
+                  tooltip: 'Log Food',
+                ),
+                _buildCircularNavItem(
+                  index: 2,
+                  icon: Icons.restaurant_menu_rounded,
+                  selectedIcon: Icons.restaurant_rounded,
+                  tooltip: 'Foods & Recipes',
+                ),
+                _buildCircularNavItem(
+                  index: 3,
+                  icon: Icons.monitor_weight_outlined,
+                  selectedIcon: Icons.monitor_weight_rounded,
+                  tooltip: 'Weight Tracker',
+                ),
+                _buildCircularNavItem(
+                  index: 4,
+                  icon: Icons.insights_rounded,
+                  selectedIcon: Icons.analytics_rounded,
+                  tooltip: 'Stats & Insights',
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../models/user_profile.dart';
 import '../models/weight_log.dart';
 import '../services/auth_service.dart';
-import '../services/api_key_store.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/api_key_guide_sheet.dart';
@@ -271,19 +268,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final usdaKey = _usdaKeyController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
     if (usdaKey.isNotEmpty && user != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await ApiKeyStore.write(user.uid, 'usda', usdaKey);
-      await prefs.setBool('usda_include_branded_${user.uid}', _includeBranded);
-
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('settings')
-          .doc('config')
-          .set({
+      await _firestoreService.saveSettings({
         'usda_api_key': usdaKey,
         'usda_include_branded': _includeBranded,
-      }, SetOptions(merge: true));
+      });
     }
     _nextPage();
   }
@@ -292,16 +280,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final geminiKey = _geminiKeyController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
     if (geminiKey.isNotEmpty && user != null) {
-      await ApiKeyStore.write(user.uid, 'gemini', geminiKey);
-
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('settings')
-          .doc('config')
-          .set({
+      await _firestoreService.saveSettings({
         'gemini_api_key': geminiKey,
-      }, SetOptions(merge: true));
+      });
     }
 
     HapticFeedback.mediumImpact();

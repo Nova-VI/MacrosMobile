@@ -136,20 +136,20 @@ class _AiMealPromptSheetState extends State<AiMealPromptSheet> {
     String message;
     switch (result.status) {
       case AiAnalysisStatus.rateLimited:
-        message = 'AI is busy. Please try again in a moment.';
+        message = 'AI busy. Try again';
         break;
       case AiAnalysisStatus.offline:
-        message = 'No internet connection. Please check your network.';
+        message = 'Needs internet';
         break;
       case AiAnalysisStatus.noKey:
-        message = 'Gemini API key is required in Profile Settings.';
+        message = 'Add a Gemini key in Settings';
         break;
       case AiAnalysisStatus.unrecognizable:
-        message = 'Could not determine macros from your description.';
+        message = 'Try another description';
         break;
       case AiAnalysisStatus.unavailable:
       default:
-        message = result.errorMessage ?? 'AI is currently unavailable.';
+        message = 'AI unavailable';
         break;
     }
 

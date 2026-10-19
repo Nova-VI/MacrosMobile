@@ -1,3 +1,4 @@
+import '../widgets/app_toast.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -231,7 +232,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   onPressed: () {
                     final grams = double.tryParse(_ingredientWeightController.text) ?? 100.0;
                     if (grams.isFinite && grams > 0) {
-                      final multiplier = grams / (food.servingSizeG > 0 ? food.servingSizeG : 100.0);
+                      final density = food.baseUnit == 'ml' &&
+                              food.density.isFinite && food.density > 0
+                          ? food.density : 1.0;
+                      final multiplier = grams / density /
+                          (food.servingSizeG > 0 ? food.servingSizeG : 100.0);
                       setState(() {
                         _recipeIngredients.add(RecipeIngredient(
                           foodId: food.id.isNotEmpty ? food.id : null,
@@ -261,11 +266,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
   Future<void> _saveRecipe() async {
     final name = _recipeNameController.text.trim();
     if (name.isEmpty) {
-      _showToast('Please enter a recipe name.', isError: true);
+      _showToast('Enter a recipe name', isError: true);
       return;
     }
     if (_recipeIngredients.isEmpty) {
-      _showToast('Please add at least one ingredient.', isError: true);
+      _showToast('Add an ingredient', isError: true);
       return;
     }
     final nutrients = [
@@ -274,7 +279,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     ];
     if (!_totalRecipeGrams.isFinite || _totalRecipeGrams <= 0 ||
         nutrients.any((value) => value is! num || !value.isFinite || value < 0)) {
-      _showToast('Recipe amounts and nutrition must be valid.', isError: true);
+      _showToast('Check recipe amounts', isError: true);
       return;
     }
 
@@ -296,13 +301,13 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
 
     if (_editingRecipeId != null) {
       await _firestoreService.updateFood(_editingRecipeId!, recipeItem.toMap());
-      _showToast('Recipe "$name" updated!');
+      _showToast('Updated');
     } else {
       final newId = await _firestoreService.addFood(recipeItem);
       if (triggerAi) {
         _handleRecipeAiEmoji(newId, name);
       }
-      _showToast('Recipe "$name" saved to library!');
+      _showToast('Saved');
     }
 
     HapticFeedback.mediumImpact();
@@ -373,10 +378,9 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     );
 
     if (confirm == true && mounted) {
-      final recipeName = _recipeNameController.text;
       await _firestoreService.deleteFood(_editingRecipeId!);
       HapticFeedback.mediumImpact();
-      _showToast('"$recipeName" deleted from library.');
+      _showToast('Deleted');
       setState(() {
         _editingRecipeId = null;
         _recipeNameController.clear();
@@ -407,24 +411,8 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     });
   }
 
-  void _showToast(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: isError ? AppColors.danger : AppColors.surface,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isError ? AppColors.danger : AppColors.primary),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
+  void _showToast(String message, {bool isError = false}) =>
+      showAppToast(context, message, isError: isError);
 
   @override
   Widget build(BuildContext context) {

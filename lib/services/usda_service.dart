@@ -117,6 +117,7 @@ class UsdaService {
       }
 
       final isLiquid = isUsdaLiquid(data);
+      final density = isLiquid ? usdaDensity(data) : 1.0;
 
       return FoodItem(
         id: '',
@@ -125,14 +126,14 @@ class UsdaService {
         usdaFdcId: fdcId,
         servingSizeG: 100.0,
         baseUnit: isLiquid ? 'ml' : 'g',
-        density: isLiquid ? usdaDensity(data) : 1.0,
+        density: density,
         emoji: '🍽️',
         macros: MacroNutrients(
           calories: getNutrientAmount(nutrientIds['calories']!),
           proteinG: getNutrientAmount(nutrientIds['protein']!),
           carbsG: getNutrientAmount(nutrientIds['carbs']!),
           fatG: getNutrientAmount(nutrientIds['fat']!),
-        ),
+        ).scale(density), // USDA reports per 100g; liquids are displayed per 100ml.
         micros: MicroNutrients(
           fiberG: getNutrientAmount(nutrientIds['fiber']!),
           sugarG: getNutrientAmount(nutrientIds['sugar']!),
@@ -145,7 +146,7 @@ class UsdaService {
           vitaminDUg: getNutrientAmount(nutrientIds['vit_d']!),
           calciumMg: getNutrientAmount(nutrientIds['calcium']!),
           ironMg: getNutrientAmount(nutrientIds['iron']!),
-        ),
+        ).scale(density),
       );
     } catch (_) {
       return null;
