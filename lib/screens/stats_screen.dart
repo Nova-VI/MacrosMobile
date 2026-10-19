@@ -1185,7 +1185,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final Map<String, double> sumMicros = {};
 
     for (final d in dailyMap.values) {
-      if (d.calories > 0) {
+      if (d.logCount > 0) {
         daysWithData++;
         sumCals += d.calories;
         sumPro += d.proteinG;
