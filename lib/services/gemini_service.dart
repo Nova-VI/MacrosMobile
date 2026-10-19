@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:characters/characters.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -110,9 +111,8 @@ class GeminiService {
             for (final part in parts) {
               if (part is Map<String, dynamic> && part['thought'] != true && part.containsKey('text')) {
                 final text = part['text'].toString().trim();
-                final runes = text.runes.toList();
-                if (runes.isNotEmpty) {
-                  return String.fromCharCode(runes.first);
+                if (text.isNotEmpty) {
+                  return text.characters.first;
                 }
               }
             }
