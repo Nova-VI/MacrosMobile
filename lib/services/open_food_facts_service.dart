@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/food_item.dart';
 import '../models/nutrition.dart';
+import '../utils/open_food_facts_serving.dart';
 
 enum OpenFoodFactsStatus { success, unreliableData, notFound, offline, error }
 
@@ -79,66 +80,16 @@ class OpenFoodFactsService {
       }
 
       // 2. Parse Serving Size and Unit
-      double servingG = 100.0;
-      String servingName = '';
-
-      final rawQuantity = product['serving_quantity'];
-      final rawServingQuantity = rawQuantity is num
-          ? rawQuantity.toDouble()
-          : double.tryParse(rawQuantity?.toString() ?? '');
       final quantityUnit =
           product['serving_quantity_unit']?.toString().trim().toLowerCase() ??
           '';
       final rawServingSize = product['serving_size']?.toString().trim() ?? '';
-
-      double? normalizedServing(double amount, String unit) {
-        if (!amount.isFinite || amount <= 0) return null;
-        switch (unit) {
-          case 'g':
-          case 'gram':
-          case 'grams':
-          case 'ml':
-            return amount;
-          case 'kg':
-          case 'l':
-            return amount * 1000;
-          case 'cl':
-            return amount * 10;
-          case 'oz':
-            return amount * 28.3495;
-          case 'fl oz':
-            return amount * 29.5735;
-          default:
-            return null;
-        }
-      }
-
-      final normalizedQuantity = rawServingQuantity == null
-          ? null
-          : normalizedServing(rawServingQuantity, quantityUnit);
-      if (normalizedQuantity != null) servingG = normalizedQuantity;
-      if (normalizedQuantity == null && rawServingSize.isNotEmpty) {
-        final match = RegExp(
-          r'([\d]+(?:[\.,][\d]+)?)\s*(fl\s*oz|kg|g|ml|cl|l|oz)\b',
-          caseSensitive: false,
-        ).allMatches(rawServingSize).lastOrNull;
-
-        if (match != null) {
-          final numStr = match.group(1)!.replaceAll(',', '.');
-          final parsedNum = double.tryParse(numStr);
-          if (parsedNum != null) {
-            final unit = match
-                .group(2)!
-                .toLowerCase()
-                .replaceAll(RegExp(r'\s+'), ' ');
-            servingG = normalizedServing(parsedNum, unit) ?? servingG;
-          }
-        }
-      }
-
-      if (rawServingSize.isNotEmpty) {
-        servingName = rawServingSize;
-      }
+      final servingG = openFoodFactsServingAmount(
+        product['serving_quantity'],
+        quantityUnit,
+        rawServingSize,
+      );
+      final servingName = rawServingSize;
 
       final nameLower = name.toLowerCase();
       final isLiquid =
