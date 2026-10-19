@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/food_item.dart';
 import '../models/nutrition.dart';
+import '../utils/usda_serving.dart';
 
 class UsdaService {
   static const String _baseUrl = 'https://api.nal.usda.gov/fdc/v1';
@@ -65,7 +66,9 @@ class UsdaService {
 
     try {
       final includeBranded = await _getIncludeBranded();
-      final dataTypes = includeBranded ? 'Foundation,SR%20Legacy,Branded' : 'Foundation,SR%20Legacy';
+      final dataTypes = includeBranded
+          ? 'Foundation,SR%20Legacy,Branded'
+          : 'Foundation,SR%20Legacy';
 
       final uri = Uri.parse(
         '$_baseUrl/foods/search?query=${Uri.encodeComponent(query)}&dataType=$dataTypes&requireAllWords=true&pageSize=15&api_key=$apiKey',
@@ -77,11 +80,15 @@ class UsdaService {
       final data = json.decode(response.body);
       final List<dynamic> foods = data['foods'] ?? [];
 
-      return foods.map((f) => {
-        'fdcId': f['fdcId'],
-        'description': f['description'] ?? '',
-        'brandOwner': f['brandOwner'] ?? '',
-      }).toList();
+      return foods
+          .map(
+            (f) => {
+              'fdcId': f['fdcId'],
+              'description': f['description'] ?? '',
+              'brandOwner': f['brandOwner'] ?? '',
+            },
+          )
+          .toList();
     } catch (_) {
       return [];
     }
@@ -109,16 +116,7 @@ class UsdaService {
         return 0.0;
       }
 
-      final desc = (data['description'] as String? ?? '').toLowerCase();
-      final isLiquid = desc.contains('juice') ||
-          desc.contains('milk') ||
-          desc.contains('water') ||
-          desc.contains('beverage') ||
-          desc.contains('soda') ||
-          desc.contains('oil') ||
-          desc.contains('soup') ||
-          desc.contains('broth') ||
-          desc.contains('drink');
+      final isLiquid = isUsdaLiquid(data);
 
       return FoodItem(
         id: '',
@@ -127,7 +125,7 @@ class UsdaService {
         usdaFdcId: fdcId,
         servingSizeG: 100.0,
         baseUnit: isLiquid ? 'ml' : 'g',
-        density: 1.0,
+        density: isLiquid ? usdaDensity(data) : 1.0,
         emoji: '🍽️',
         macros: MacroNutrients(
           calories: getNutrientAmount(nutrientIds['calories']!),
