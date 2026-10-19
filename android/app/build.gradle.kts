@@ -1,17 +1,9 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services") 
-}
-
-val releaseKeyProperties = Properties()
-val releaseKeyPropertiesFile = rootProject.file("key.properties")
-if (releaseKeyPropertiesFile.exists()) {
-    releaseKeyPropertiesFile.inputStream().use { releaseKeyProperties.load(it) }
 }
 
 android {
@@ -39,39 +31,13 @@ android {
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            keyAlias = releaseKeyProperties.getProperty("keyAlias")
-            keyPassword = releaseKeyProperties.getProperty("keyPassword")
-            storeFile = releaseKeyProperties.getProperty("storeFile")?.let { file(it) }
-            storePassword = releaseKeyProperties.getProperty("storePassword")
-        }
-    }
-
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
-}
-
-val verifyReleaseSigning by tasks.registering {
-    group = "verification"
-    doLast {
-        val required = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
-        val missing = required.filter { releaseKeyProperties.getProperty(it).isNullOrBlank() }
-        if (missing.isNotEmpty()) {
-            throw GradleException("Release signing requires android/key.properties with: ${missing.joinToString(", ")}")
-        }
-        val keystore = file(releaseKeyProperties.getProperty("storeFile"))
-        if (!keystore.isFile) {
-            throw GradleException("Release signing keystore does not exist at the configured storeFile path")
-        }
-    }
-}
-
-tasks.matching { it.name == "preReleaseBuild" }.configureEach {
-    dependsOn(verifyReleaseSigning)
 }
 
 flutter {

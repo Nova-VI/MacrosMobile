@@ -25,13 +25,4 @@ Run `flutter analyze --no-pub` and `flutter test` after changes. Before releasin
 
 ## Android release
 
-The `release` build type reads signing data from the ignored `android/key.properties` file. Create a private keystore and add these properties before building a distributable artifact:
-
-```properties
-storeFile=C:/absolute/path/to/private/upload-key.jks
-storePassword=<private password>
-keyAlias=<private alias>
-keyPassword=<private password>
-```
-
-Keep the keystore and passwords outside Git. Without those values, a release artifact is not ready for distribution. Build with `flutter build appbundle --release`, then verify the resulting certificate and package ID before distribution.
+The current `release` build type uses the local Android debug signing key, matching the project's previous build behavior. `flutter build apk --release` works without `android/key.properties`, but the resulting APK is intended for personal testing. If you distribute the app, configure a private release key first. If an APK is already installed or distributed, preserve its signing certificate so the next APK can update it.
