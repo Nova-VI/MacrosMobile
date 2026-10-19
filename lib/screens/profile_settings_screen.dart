@@ -593,7 +593,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   label: const Text('Sign Out of Account', style: TextStyle(fontWeight: FontWeight.w800)),
                   onPressed: () async {
                     final confirm = await _showSignOutDialog();
-                    if (confirm == true && mounted) {
+                    if (confirm == true && context.mounted) {
                       Navigator.pop(context);
                       await _authService.signOut();
                     }
@@ -645,7 +645,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: accents.entries.map((entry) {
-              final isSelected = AppColors.primary.value == entry.value.value;
+              final isSelected = AppColors.primary.toARGB32() == entry.value.toARGB32();
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => ThemeManager.setAccent(entry.value),
@@ -678,7 +678,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           Column(
             children: backgrounds.entries.map((entry) {
               final bgColors = entry.value;
-              final isSelected = AppColors.background.value == bgColors[0].value;
+              final isSelected = AppColors.background.toARGB32() == bgColors[0].toARGB32();
 
               return InkWell(
                 onTap: () => ThemeManager.setBackground(bgColors[0], bgColors[1]),

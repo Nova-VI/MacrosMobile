@@ -184,7 +184,7 @@ EVALUATION DECISION TREE:
        "reason": "No food detected"
      }
 
-2. FIRST TURN EVALUATION (isSecondTurn = ${isSecondTurn}):
+ 2. FIRST TURN EVALUATION (isSecondTurn = $isSecondTurn):
    - If this is TURN 1 AND the user mentions real food but omits key sizes, weights, or preparation methods:
      DO NOT GUESS ON TURN 1. You MUST return 1 to 3 brief clarifying questions in the user's EXACT language/dialect.
      Return JSON:
@@ -195,7 +195,7 @@ EVALUATION DECISION TREE:
        ]
      }
 
-3. SECOND TURN EVALUATION (isSecondTurn = ${isSecondTurn}):
+ 3. SECOND TURN EVALUATION (isSecondTurn = $isSecondTurn):
    When the user responds to your questions on Turn 2:
 
    A. IF THE USER PROVIDED CLARIFYING DETAILS:

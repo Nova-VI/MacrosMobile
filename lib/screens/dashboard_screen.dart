@@ -315,9 +315,11 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
     try {
       await FirestoreService().addLog(newLog);
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not copy log: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not copy log: $error')),
+        );
+      }
       return;
     }
     if (!mounted) return;
@@ -809,9 +811,11 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
             await FirestoreService().deleteLog(log.id, date: log.date);
             return true;
           } catch (error) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Could not delete log: $error')),
-            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Could not delete log: $error')),
+              );
+            }
             return false;
           }
         }
@@ -911,7 +915,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: '$pVal',
+                                  text: pVal,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.textMain,
@@ -925,7 +929,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: '$cCarbVal',
+                                  text: cCarbVal,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.textMain,
@@ -939,7 +943,7 @@ class _DashboardDayViewState extends State<_DashboardDayView> {
                                   ),
                                 ),
                                 TextSpan(
-                                  text: '$fVal',
+                                  text: fVal,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,
                                     color: AppColors.textMain,

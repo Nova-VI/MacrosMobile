@@ -22,7 +22,7 @@ class ThemeManager {
     HapticFeedback.lightImpact();
 
     SharedPreferences.getInstance().then((prefs) {
-      prefs.setInt('theme_accent', color.value);
+      prefs.setInt('theme_accent', color.toARGB32());
     });
   }
 
@@ -33,8 +33,8 @@ class ThemeManager {
     HapticFeedback.lightImpact();
 
     SharedPreferences.getInstance().then((prefs) {
-      prefs.setInt('theme_bg', bg.value);
-      prefs.setInt('theme_surface', surface.value);
+      prefs.setInt('theme_bg', bg.toARGB32());
+      prefs.setInt('theme_surface', surface.toARGB32());
     });
   }
 }

@@ -191,9 +191,11 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
                     try {
                       await FirestoreService().deleteFood(widget.food.id);
                     } catch (error) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Could not delete food: $error')),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Could not delete food: $error')),
+                        );
+                      }
                       return;
                     }
                     if (!mounted) return;
@@ -273,9 +275,11 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
     try {
       await FirestoreService().updateFood(widget.food.id, updatedItem.toMap());
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save food: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save food: $error')),
+        );
+      }
       return;
     }
     if (!mounted) return;

@@ -749,7 +749,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                           ),
                         ),
                         TextSpan(
-                          text: '$pVal',
+                          text: pVal,
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppColors.textMain,
@@ -763,7 +763,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                           ),
                         ),
                         TextSpan(
-                          text: '$cCarbVal',
+                          text: cCarbVal,
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppColors.textMain,
@@ -777,7 +777,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                           ),
                         ),
                         TextSpan(
-                          text: '$fVal',
+                          text: fVal,
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppColors.textMain,
@@ -1216,11 +1216,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                               children: [
                                 TextSpan(text: '$cVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
                                 TextSpan(text: 'cal  ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary.withValues(alpha: 0.95))),
-                                TextSpan(text: '$pVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: pVal, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
                                 TextSpan(text: 'p  ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95))),
-                                TextSpan(text: '$cCarbVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: cCarbVal, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
                                 TextSpan(text: 'c  ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95))),
-                                TextSpan(text: '$fVal', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                                TextSpan(text: fVal, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textMain)),
                                 TextSpan(text: 'f', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95))),
                               ],
                             ),
@@ -1317,11 +1317,11 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                 Text.rich(
                   TextSpan(
                     children: [
-                      TextSpan(text: '$pVal', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                      TextSpan(text: pVal, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
                       TextSpan(text: 'p  ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.protein.withValues(alpha: 0.95))),
-                      TextSpan(text: '$cCarbVal', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                      TextSpan(text: cCarbVal, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
                       TextSpan(text: 'c  ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.carbs.withValues(alpha: 0.95))),
-                      TextSpan(text: '$fVal', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
+                      TextSpan(text: fVal, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.textMain)),
                       TextSpan(text: 'f', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.fat.withValues(alpha: 0.95))),
                     ],
                   ),
