@@ -232,7 +232,7 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
                   ),
                   onPressed: () {
                     final grams = double.tryParse(_ingredientWeightController.text) ?? 100.0;
-                    if (grams > 0) {
+                    if (grams.isFinite && grams > 0) {
                       final multiplier = grams / (food.servingSizeG > 0 ? food.servingSizeG : 100.0);
                       setState(() {
                         _recipeIngredients.add(RecipeIngredient(
@@ -268,6 +268,15 @@ class _RecipesLibraryScreenState extends State<RecipesLibraryScreen> {
     }
     if (_recipeIngredients.isEmpty) {
       _showToast('Please add at least one ingredient.', isError: true);
+      return;
+    }
+    final nutrients = [
+      ..._aggregatedRecipeMacros.toMap().values,
+      ..._aggregatedRecipeMicros.toMap().values,
+    ];
+    if (!_totalRecipeGrams.isFinite || _totalRecipeGrams <= 0 ||
+        nutrients.any((value) => value is! num || !value.isFinite || value < 0)) {
+      _showToast('Recipe amounts and nutrition must be valid.', isError: true);
       return;
     }
 

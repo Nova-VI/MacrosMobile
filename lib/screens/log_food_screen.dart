@@ -9,6 +9,7 @@ import '../services/firestore_service.dart';
 import '../services/usda_service.dart';
 import '../services/gemini_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/nutrition_validation.dart';
 import '../widgets/emoji_picker_sheet.dart';
 import '../widgets/barcode_scanner_sheet.dart';
 import '../widgets/ai_meal_prompt_sheet.dart';
@@ -779,7 +780,33 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     );
   }
 
+  bool _validateFoodInputs() {
+    final error = validateNutritionValues(
+      positive: {
+        'servings': _servingsController.text,
+        'base serving size': _servingSizeController.text,
+        'total amount': _totalAmountController.text,
+      },
+      nonnegative: {
+        'Protein': _proteinController.text, 'Carbs': _carbsController.text,
+        'Fat': _fatController.text, 'Calories': _caloriesController.text,
+        'Fiber': _fiberController.text, 'Sugar': _sugarController.text,
+        'Sodium': _sodiumController.text, 'Saturated fat': _satFatController.text,
+        'Cholesterol': _cholesterolController.text, 'Potassium': _potassiumController.text,
+        'Vitamin A': _vitAController.text, 'Vitamin C': _vitCController.text,
+        'Vitamin D': _vitDController.text, 'Calcium': _calciumController.text,
+        'Iron': _ironController.text,
+      },
+    );
+    if (error != null) {
+      _showToast(error, isError: true);
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _saveOnlyToLibrary() async {
+    if (!_validateFoodInputs()) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       _showToast('Food name is required to save to library.', isError: true);
@@ -842,6 +869,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
   }
 
   Future<void> _submitLog() async {
+    if (!_validateFoodInputs()) return;
     final name = _nameController.text.trim();
     if (name.isEmpty && _saveToLibrary) {
       _showToast('Food name is required to save to library.', isError: true);

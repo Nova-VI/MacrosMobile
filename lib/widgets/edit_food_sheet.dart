@@ -4,6 +4,7 @@ import '../models/food_item.dart';
 import '../models/nutrition.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/nutrition_validation.dart';
 import 'emoji_picker_sheet.dart';
 
 class EditFoodSheet extends StatefulWidget {
@@ -212,6 +213,24 @@ class _EditFoodSheetState extends State<EditFoodSheet> {
   Future<void> _saveChanges() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
+
+    final validationError = validateNutritionValues(
+      positive: {'base serving size': _servingGController.text, 'density': _densityController.text},
+      nonnegative: {
+        'Protein': _proteinController.text, 'Carbs': _carbsController.text,
+        'Fat': _fatController.text, 'Calories': _caloriesController.text,
+        'Fiber': _fiberController.text, 'Sugar': _sugarController.text,
+        'Sodium': _sodiumController.text, 'Saturated fat': _satFatController.text,
+        'Cholesterol': _cholesterolController.text, 'Potassium': _potassiumController.text,
+        'Vitamin A': _vitAController.text, 'Vitamin C': _vitCController.text,
+        'Vitamin D': _vitDController.text, 'Calcium': _calciumController.text,
+        'Iron': _ironController.text,
+      },
+    );
+    if (validationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(validationError)));
+      return;
+    }
 
     final p = double.tryParse(_proteinController.text) ?? 0.0;
     final c = double.tryParse(_carbsController.text) ?? 0.0;

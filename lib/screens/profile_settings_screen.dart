@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/nutrition_validation.dart';
 import '../widgets/api_key_guide_sheet.dart';
 import '../widgets/weekly_checkin_sheet.dart';
 import 'weight_tracker_screen.dart';
@@ -394,6 +395,18 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   }
 
   Future<void> _saveProfileAndGoals() async {
+    final validationError = validateNutritionValues(
+      positive: {'height': _heightController.text, 'calorie target': _targetCalController.text},
+      nonnegative: {
+        'Protein target': _targetProController.text,
+        'Carb target': _targetCarbController.text,
+        'Fat target': _targetFatController.text,
+      },
+    );
+    if (validationError != null) {
+      _showToast(validationError, isError: true);
+      return;
+    }
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final birthDateStr = DateFormat('yyyy-MM-dd').format(_birthDate);
     final currentProfile = _firestoreService.profileNotifier.value;
