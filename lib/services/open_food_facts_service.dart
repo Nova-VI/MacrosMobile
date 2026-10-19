@@ -5,13 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/food_item.dart';
 import '../models/nutrition.dart';
 
-enum OpenFoodFactsStatus {
-  success,
-  unreliableData,
-  notFound,
-  offline,
-  error,
-}
+enum OpenFoodFactsStatus { success, unreliableData, notFound, offline, error }
 
 class OpenFoodFactsResult {
   final OpenFoodFactsStatus status;
@@ -45,9 +39,7 @@ class OpenFoodFactsService {
       final response = await http
           .get(
             uri,
-            headers: {
-              'User-Agent': 'MacroTracker - Mobile - Version 1.0.0',
-            },
+            headers: {'User-Agent': 'MacroTracker - Mobile - Version 1.0.0'},
           )
           .timeout(const Duration(seconds: 7));
 
@@ -71,13 +63,15 @@ class OpenFoodFactsService {
       final nutriments = product['nutriments'] as Map<String, dynamic>? ?? {};
 
       // 1. Resolve Food Name
-      String name = product['product_name']?.toString().trim() ??
+      String name =
+          product['product_name']?.toString().trim() ??
           product['product_name_en']?.toString().trim() ??
           product['generic_name']?.toString().trim() ??
           '';
 
       final brand = product['brands']?.toString().trim() ?? '';
-      if (brand.isNotEmpty && !name.toLowerCase().contains(brand.toLowerCase())) {
+      if (brand.isNotEmpty &&
+          !name.toLowerCase().contains(brand.toLowerCase())) {
         name = name.isNotEmpty ? '$brand $name' : brand;
       }
       if (name.isEmpty) {
@@ -88,31 +82,56 @@ class OpenFoodFactsService {
       double servingG = 100.0;
       String servingName = '';
 
-      final rawServingQuantity = (product['serving_quantity'] as num?)?.toDouble();
+      final rawQuantity = product['serving_quantity'];
+      final rawServingQuantity = rawQuantity is num
+          ? rawQuantity.toDouble()
+          : double.tryParse(rawQuantity?.toString() ?? '');
+      final quantityUnit =
+          product['serving_quantity_unit']?.toString().trim().toLowerCase() ??
+          '';
       final rawServingSize = product['serving_size']?.toString().trim() ?? '';
 
-      if (rawServingQuantity != null && rawServingQuantity > 0) {
-        servingG = rawServingQuantity;
-      } else if (rawServingSize.isNotEmpty) {
+      double? normalizedServing(double amount, String unit) {
+        if (!amount.isFinite || amount <= 0) return null;
+        switch (unit) {
+          case 'g':
+          case 'gram':
+          case 'grams':
+          case 'ml':
+            return amount;
+          case 'kg':
+          case 'l':
+            return amount * 1000;
+          case 'cl':
+            return amount * 10;
+          case 'oz':
+            return amount * 28.3495;
+          case 'fl oz':
+            return amount * 29.5735;
+          default:
+            return null;
+        }
+      }
+
+      final normalizedQuantity = rawServingQuantity == null
+          ? null
+          : normalizedServing(rawServingQuantity, quantityUnit);
+      if (normalizedQuantity != null) servingG = normalizedQuantity;
+      if (normalizedQuantity == null && rawServingSize.isNotEmpty) {
         final match = RegExp(
-          r'([\d]+(?:[\.,][\d]+)?)\s*(g|ml|cl|l|oz)?',
+          r'([\d]+(?:[\.,][\d]+)?)\s*(fl\s*oz|kg|g|ml|cl|l|oz)\b',
           caseSensitive: false,
-        ).firstMatch(rawServingSize);
+        ).allMatches(rawServingSize).lastOrNull;
 
         if (match != null) {
           final numStr = match.group(1)!.replaceAll(',', '.');
           final parsedNum = double.tryParse(numStr);
-          final unit = match.group(2)?.toLowerCase();
-          if (parsedNum != null && parsedNum > 0) {
-            if (unit == 'cl') {
-              servingG = parsedNum * 10;
-            } else if (unit == 'l') {
-              servingG = parsedNum * 1000;
-            } else if (unit == 'oz') {
-              servingG = parsedNum * 28.35;
-            } else {
-              servingG = parsedNum;
-            }
+          if (parsedNum != null) {
+            final unit = match
+                .group(2)!
+                .toLowerCase()
+                .replaceAll(RegExp(r'\s+'), ' ');
+            servingG = normalizedServing(parsedNum, unit) ?? servingG;
           }
         }
       }
@@ -122,7 +141,8 @@ class OpenFoodFactsService {
       }
 
       final nameLower = name.toLowerCase();
-      final isLiquid = nameLower.contains('milk') ||
+      final isLiquid =
+          nameLower.contains('milk') ||
           nameLower.contains('lait') ||
           nameLower.contains('juice') ||
           nameLower.contains('jus') ||
@@ -134,12 +154,16 @@ class OpenFoodFactsService {
           nameLower.contains('soda') ||
           nameLower.contains('huile') ||
           nameLower.contains('oil') ||
-          rawServingSize.toLowerCase().contains('ml');
+          rawServingSize.toLowerCase().contains('ml') ||
+          ['ml', 'cl', 'l', 'fl oz'].contains(quantityUnit);
 
       final baseUnit = isLiquid ? 'ml' : 'g';
 
       // 3. Helper to parse nutrients per 100g
-      double getNutrimentPer100g(String key, [List<String> altKeys = const []]) {
+      double getNutrimentPer100g(
+        String key, [
+        List<String> altKeys = const [],
+      ]) {
         if (nutriments.containsKey('${key}_100g')) {
           return (nutriments['${key}_100g'] as num?)?.toDouble() ?? 0.0;
         }
@@ -180,7 +204,8 @@ class OpenFoodFactsService {
         return OpenFoodFactsResult(
           status: OpenFoodFactsStatus.unreliableData,
           foodItem: incompleteItem,
-          message: 'Nutrition facts are missing for this product on Open Food Facts.',
+          message:
+              'Nutrition facts are missing for this product on Open Food Facts.',
         );
       }
 

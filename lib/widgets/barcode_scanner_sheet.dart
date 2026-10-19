@@ -1,14 +1,12 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/food_item.dart';
-import '../models/nutrition.dart';
 import '../services/open_food_facts_service.dart';
-import '../services/usda_service.dart';
 import '../theme/app_theme.dart';
 
-typedef FoodScanFoundCallback = void Function(FoodItem food, {bool isUnreliable});
+typedef FoodScanFoundCallback =
+    void Function(FoodItem food, {bool isUnreliable});
 typedef FoodScanNotFoundCallback = void Function(String message);
 
 class BarcodeScannerSheet extends StatefulWidget {
@@ -30,10 +28,8 @@ class BarcodeScannerSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => BarcodeScannerSheet(
-        onFoodFound: onFoodFound,
-        onNotFound: onNotFound,
-      ),
+      builder: (_) =>
+          BarcodeScannerSheet(onFoodFound: onFoodFound, onNotFound: onNotFound),
     );
   }
 
@@ -46,7 +42,6 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet>
   late final MobileScannerController _scannerController;
   late final AnimationController _scanAnimationController;
   final OpenFoodFactsService _offService = OpenFoodFactsService();
-  final UsdaService _usdaService = UsdaService();
 
   bool _isProcessing = false;
   bool _isTorchOn = false;
@@ -82,14 +77,16 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet>
 
     if (!mounted) return;
 
-    if (result.status == OpenFoodFactsStatus.success && result.foodItem != null) {
+    if (result.status == OpenFoodFactsStatus.success &&
+        result.foodItem != null) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
       widget.onFoodFound(result.foodItem!, isUnreliable: false);
       return;
     }
 
-    if (result.status == OpenFoodFactsStatus.unreliableData && result.foodItem != null) {
+    if (result.status == OpenFoodFactsStatus.unreliableData &&
+        result.foodItem != null) {
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
       widget.onFoodFound(result.foodItem!, isUnreliable: true);
@@ -105,49 +102,13 @@ class _BarcodeScannerSheetState extends State<BarcodeScannerSheet>
       return;
     }
 
-    // Secondary fallback search via USDA
-    final usdaMatches = await _usdaService.searchFoods(barcode);
-    if (usdaMatches.isNotEmpty && mounted) {
-      final fdcId = usdaMatches.first['fdcId'] as int?;
-      if (fdcId != null) {
-        final usdaItem = await _usdaService.getFoodDetails(fdcId);
-        if (usdaItem != null && mounted) {
-          final pro = usdaItem.macros.proteinG;
-          final carb = usdaItem.macros.carbsG;
-          final fat = usdaItem.macros.fatG;
-          final dynamicCal = (pro * 4.0) + (carb * 4.0) + (fat * 9.0);
-
-          final normalizedUsda = FoodItem(
-            id: '',
-            name: usdaItem.name,
-            source: 'usda',
-            usdaFdcId: usdaItem.usdaFdcId,
-            servingSizeG: usdaItem.servingSizeG,
-            baseUnit: usdaItem.baseUnit,
-            servingName: usdaItem.servingName,
-            emoji: '🍽️',
-            macros: MacroNutrients(
-              calories: dynamicCal,
-              proteinG: pro,
-              carbsG: carb,
-              fatG: fat,
-            ),
-            micros: usdaItem.micros,
-          );
-
-          HapticFeedback.mediumImpact();
-          Navigator.pop(context);
-          widget.onFoodFound(normalizedUsda, isUnreliable: false);
-          return;
-        }
-      }
-    }
-
     if (!mounted) return;
 
     HapticFeedback.lightImpact();
     Navigator.pop(context);
-    widget.onNotFound?.call('Product not found for barcode "$barcode".');
+    widget.onNotFound?.call(
+      result.message ?? 'Product not found for barcode "$barcode".',
+    );
   }
 
   void _showManualBarcodeDialog() {
