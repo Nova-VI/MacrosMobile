@@ -321,30 +321,26 @@ class FirestoreService {
 
     final weightSub = _db.collection('users').doc(uid).collection('weight_logs').doc('all').snapshots().listen((snap) {
       if (!_isActiveSession(uid, generation)) return;
-      if (snap.exists && snap.data() != null) {
-        final entries = snap.data()!['entries'] as Map<String, dynamic>? ?? {};
-        _weightCache.clear();
-        entries.forEach((date, weight) {
-          final w = (weight as num?)?.toDouble();
-          if (w != null) _weightCache[date] = w;
-        });
-        _rebuildFlatWeights();
-      }
+      final entries = snap.data()?['entries'] as Map<String, dynamic>? ?? {};
+      _weightCache.clear();
+      entries.forEach((date, weight) {
+        final w = (weight as num?)?.toDouble();
+        if (w != null) _weightCache[date] = w;
+      });
+      _rebuildFlatWeights();
     });
     _subscriptions['weights'] = weightSub;
 
     final foodSub = _db.collection('users').doc(uid).collection('foods').doc('library').snapshots().listen((snap) {
       if (!_isActiveSession(uid, generation)) return;
-      if (snap.exists && snap.data() != null) {
-        final items = snap.data()!['items'] as Map<String, dynamic>? ?? {};
-        _foodCache.clear();
-        items.forEach((id, rawFood) {
-          if (rawFood is Map) {
-            _foodCache[id] = FoodItem.fromFirestore(id, Map<String, dynamic>.from(rawFood));
-          }
-        });
-        _rebuildFlatFoods();
-      }
+      final items = snap.data()?['items'] as Map<String, dynamic>? ?? {};
+      _foodCache.clear();
+      items.forEach((id, rawFood) {
+        if (rawFood is Map) {
+          _foodCache[id] = FoodItem.fromFirestore(id, Map<String, dynamic>.from(rawFood));
+        }
+      });
+      _rebuildFlatFoods();
     });
     _subscriptions['foods'] = foodSub;
 
