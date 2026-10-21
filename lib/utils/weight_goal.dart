@@ -35,8 +35,8 @@ double? goalWeightAtDate(UserProfile profile, List<WeightLog> weights, DateTime 
     }
   }
   final exactWeight = weights.where((w) => w.date == anchorDate);
-  final initialWeight = exactWeight.isNotEmpty ? exactWeight.first.weightKg
-      : (trendWeightsMap[anchorDate] ?? anchor.weightKg);
+  final initialWeight = trendWeightsMap[anchorDate] ??
+      (exactWeight.isNotEmpty ? exactWeight.first.weightKg : anchor.weightKg);
   final goal = double.tryParse(phase?.goal ?? profile.goal) ?? 0;
   final days = DateTime.parse('${dateKey}T00:00:00Z')
       .difference(DateTime.parse('${anchorDate}T00:00:00Z')).inDays;

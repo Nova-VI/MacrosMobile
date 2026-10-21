@@ -8,10 +8,7 @@ class AdaptiveCoachState {
   final double p10;
   final double p11;
   final double tdeeKcal;
-  final double latentIntakeBias;
-  final double integratorKcalDays;
   final double resVariance;
-  final double biasVariance;
   final double informationGain;
   final double tissueEnthalpy;
 
@@ -23,10 +20,7 @@ class AdaptiveCoachState {
     this.p10 = 0.001,
     this.p11 = 0.0001,
     required this.tdeeKcal,
-    this.latentIntakeBias = 0.88,
-    this.integratorKcalDays = 0.0,
     this.resVariance = 0.0050,
-    this.biasVariance = 0.00005,
     this.informationGain = 0.0,
     this.tissueEnthalpy = 7700.0,
   });
@@ -47,10 +41,7 @@ class AdaptiveCoachState {
       p10: 0.001,
       p11: 0.0001,
       tdeeKcal: initialTdeeKcal,
-      latentIntakeBias: 0.88,
-      integratorKcalDays: 0.0,
       resVariance: 0.0050,
-      biasVariance: 0.00005,
       informationGain: 0.0,
       tissueEnthalpy: enthalpy,
     );
@@ -93,14 +84,14 @@ class AdaptiveCoachEngine {
   static const double rhoFat = 9400.0;
   static const double rhoLean = 1800.0;
 
-  static const double alphaBias = 0.010;
   static const double lambdaRes = 0.05;
-  static const double lambdaBias = 0.03;
   static const double maxTdeeDailyStep = 24.0;
 
-  static const double kpGain = 4200.0;
-  static const double kiGain = 45.0;
-  static const double iMax = 50.0;
+  static const double catchupDays = 42.0;
+  static const double maxCatchupKgPerDay = 0.05;
+  static const double maxWeeklyChangeKcal = 200.0;
+  static const double positionDeadbandKg = 0.25;
+  static const double velocityDeadbandKgPerDay = 0.01;
   static const double clinicalFloorKcal = 1200.0;
   static const double clinicalCeilingKcal = 4500.0;
 
@@ -207,34 +198,22 @@ class AdaptiveCoachEngine {
     final bool hasSufficientIntake = validIntakeDaysCount >= 4 && validMeanCalories14d > 0;
 
     double omegaK = 0.0;
-    double updatedBias = prevState.latentIntakeBias;
     double updatedResVariance = prevState.resVariance;
-    double updatedBiasVariance = prevState.biasVariance;
     double? tdeeThermo;
 
     if (hasSufficientIntake) {
       final qCoverage = ((validIntakeDaysCount - 3.0) / 8.0).clamp(0.0, 1.0);
       final cImplied = math.max(1000.0, prevState.tdeeKcal + energyStoredFlux);
-      final rk = (validMeanCalories14d - (prevState.latentIntakeBias * cImplied)) / cImplied;
+      final rk = (validMeanCalories14d - cImplied) / cImplied;
 
       updatedResVariance = ((1.0 - lambdaRes) * prevState.resVariance) + (lambdaRes * (rk * rk));
 
-      if (validIntakeDaysCount >= 7 && studyDayIndex >= 21) {
-        final observedRatio = validMeanCalories14d / cImplied;
-        updatedBias = ((1.0 - alphaBias) * prevState.latentIntakeBias) + (alphaBias * observedRatio);
-        updatedBias = updatedBias.clamp(0.60, 1.10);
-      }
-
-      final biasDelta = updatedBias - prevState.latentIntakeBias;
-      updatedBiasVariance = ((1.0 - lambdaBias) * prevState.biasVariance) + (lambdaBias * (biasDelta * biasDelta));
-
-      final rReliability = math.exp(-updatedResVariance / (2.0 * 0.12 * 0.12)) *
-          math.exp(-updatedBiasVariance / (2.0 * 0.015 * 0.015));
+      final rReliability = math.exp(-updatedResVariance / (2.0 * 0.12 * 0.12));
 
       omegaK = qCoverage * rReliability;
 
-      final safeBias = updatedBias.clamp(0.60, 1.10);
-      tdeeThermo = (validMeanCalories14d / safeBias) - energyStoredFlux;
+      // Intake completeness cannot be inferred independently from expenditure.
+      tdeeThermo = validMeanCalories14d - energyStoredFlux;
     }
 
     // Without enough intake logs, freeze expenditure after its initial estimate.
@@ -260,10 +239,7 @@ class AdaptiveCoachEngine {
       p10: updatedP10,
       p11: updatedP11,
       tdeeKcal: updatedTdee,
-      latentIntakeBias: updatedBias,
-      integratorKcalDays: prevState.integratorKcalDays,
       resVariance: updatedResVariance,
-      biasVariance: updatedBiasVariance,
       informationGain: omegaK,
       tissueEnthalpy: rhoW,
     );
@@ -274,6 +250,7 @@ class AdaptiveCoachEngine {
     required double initialPhaseMassKg,
     required double targetWeeklyWeightDeltaKg,
     required int phaseDayIndex,
+    double? currentTargetCaloriesKcal,
     required double proteinMultiplierGPerKg,
     double lipidFloorMultiplierGPerKg = 0.60,
   }) {
@@ -281,14 +258,23 @@ class AdaptiveCoachEngine {
     final lIdeal = initialPhaseMassKg + (vTarget * phaseDayIndex);
 
     final ePos = currentState.estimatedMassKg - lIdeal;
-    final eV = currentState.tissueVelocityKgPerDay - vTarget;
+    final catchupVelocity = (ePos / catchupDays)
+        .clamp(-maxCatchupKgPerDay, maxCatchupKgPerDay);
+    final desiredVelocity = vTarget - catchupVelocity;
+    final velocityGap = desiredVelocity - currentState.tissueVelocityKgPerDay;
+    double changeKcal = velocityGap.abs() < velocityDeadbandKgPerDay
+        ? 0.0
+        : (velocityGap * currentState.tissueEnthalpy)
+            .clamp(-maxWeeklyChangeKcal, maxWeeklyChangeKcal);
+    if (ePos > positionDeadbandKg) changeKcal = math.min(0.0, changeKcal);
+    if (ePos < -positionDeadbandKg) changeKcal = math.max(0.0, changeKcal);
 
-    final updatedIntegrator = (currentState.integratorKcalDays + (ePos * 1.0)).clamp(-iMax, iMax);
-    final deltaPI = (kpGain * eV) + (kiGain * updatedIntegrator);
-
-    final nominalDeficitKcal = (targetWeeklyWeightDeltaKg * 7700.0) / 7.0;
-    final eNominal = currentState.tdeeKcal + nominalDeficitKcal;
-    final eTargetContinuous = (eNominal - deltaPI).clamp(clinicalFloorKcal, clinicalCeilingKcal);
+    final baseline = currentTargetCaloriesKcal != null &&
+            currentTargetCaloriesKcal.isFinite && currentTargetCaloriesKcal > 0
+        ? currentTargetCaloriesKcal
+        : currentState.tdeeKcal + (targetWeeklyWeightDeltaKg * 7700.0 / 7.0);
+    final eTargetContinuous = (baseline + changeKcal)
+        .clamp(clinicalFloorKcal, clinicalCeilingKcal);
     final int eTarget = eTargetContinuous.round();
 
     final int proteinG = (currentState.estimatedMassKg * proteinMultiplierGPerKg).round();
@@ -313,7 +299,7 @@ class AdaptiveCoachEngine {
       trendWeightKg: currentState.estimatedMassKg,
       tissueVelocityKgPerDay: currentState.tissueVelocityKgPerDay,
       informationGain: currentState.informationGain,
-      piAdjustmentKcal: deltaPI,
+      piAdjustmentKcal: -changeKcal,
     );
   }
 }

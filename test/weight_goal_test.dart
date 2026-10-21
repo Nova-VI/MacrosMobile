@@ -38,6 +38,11 @@ void main() {
         trendWeightsMap: {'2026-10-09': 79.4}), 79.4);
   });
 
+  test('phase start prefers trend over a noisy same-day weigh-in', () {
+    expect(goalWeightAtDate(profile, weights, DateTime(2026, 10, 1),
+        trendWeightsMap: {'2026-10-01': 80.4}), 80.4);
+  });
+
   test('current phase shortcut resolves only an active phase', () {
     expect(currentPhaseStartDate(profile, DateTime(2026, 10, 16)),
         DateTime(2026, 10, 9));

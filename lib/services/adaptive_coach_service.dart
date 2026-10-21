@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_profile.dart';
 import 'adaptive_coach_engine.dart';
+import 'coach_pipeline.dart';
 import 'firestore_service.dart';
-import '../utils/calendar_date.dart';
 
 class WeeklyCheckInProposal {
   final String date;
@@ -41,16 +41,22 @@ class WeeklyCheckInProposal {
 }
 
 class AdaptiveCoachService {
-  static final AdaptiveCoachService _instance = AdaptiveCoachService._internal();
+  static final AdaptiveCoachService _instance =
+      AdaptiveCoachService._internal();
   factory AdaptiveCoachService() => _instance;
   AdaptiveCoachService._internal();
 
   final FirestoreService _firestoreService = FirestoreService();
 
-  final ValueNotifier<WeeklyCheckInProposal?> checkInProposalNotifier = ValueNotifier(null);
-  final ValueNotifier<WeeklyCheckInProposal?> dismissedProposalNotifier = ValueNotifier(null);
-  final ValueNotifier<AdaptiveCoachState?> liveObserverStateNotifier = ValueNotifier(null);
-  final ValueNotifier<Map<String, double>> trendWeightsNotifier = ValueNotifier({});
+  final ValueNotifier<WeeklyCheckInProposal?> checkInProposalNotifier =
+      ValueNotifier(null);
+  final ValueNotifier<WeeklyCheckInProposal?> dismissedProposalNotifier =
+      ValueNotifier(null);
+  final ValueNotifier<AdaptiveCoachState?> liveObserverStateNotifier =
+      ValueNotifier(null);
+  final ValueNotifier<Map<String, double>> trendWeightsNotifier = ValueNotifier(
+    {},
+  );
   Future<void>? _recomputeInFlight;
   bool _recomputeRequested = false;
   int _recomputeRevision = 0;
@@ -83,7 +89,9 @@ class AdaptiveCoachService {
     final uid = _firestoreService.currentUid;
     if (uid == null) return;
     await _firestoreService.ensureAllMonthsLoaded();
-    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) return;
+    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) {
+      return;
+    }
 
     final profile = _firestoreService.profileNotifier.value;
     final allLogs = _firestoreService.logsNotifier.value;
@@ -97,92 +105,48 @@ class AdaptiveCoachService {
       return;
     }
 
-    final weightDates = allWeights.map((w) => w.date).where((d) => d.isNotEmpty);
-    final logDates = allLogs.map((l) => l.date).where((d) => d.isNotEmpty);
-
-    final allDates = {...weightDates, ...logDates}.toList()..sort();
-    if (allDates.isEmpty) return;
-
-    final startDateStr = allDates.first;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    DateTime cursor = DateFormat('yyyy-MM-dd').parse(startDateStr);
+    final todayStr = DateFormat('yyyy-MM-dd').format(today);
 
     final Map<String, double> dailyWeightsMap = {};
     for (final w in allWeights) {
-      dailyWeightsMap[w.date] = w.weightKg;
+      if (w.date.isNotEmpty) dailyWeightsMap[w.date] = w.weightKg;
     }
 
     final Map<String, double> dailyCaloriesMap = {};
     for (final l in allLogs) {
-      dailyCaloriesMap[l.date] = (dailyCaloriesMap[l.date] ?? 0.0) + l.macros.calories;
-    }
-
-    final initialWeight = allWeights.isNotEmpty ? allWeights.first.weightKg : profile.weight;
-    final initialFat = AdaptiveCoachEngine.estimateInitialFatMass(
-      weightKg: initialWeight,
-      heightCm: profile.height,
-      ageYears: profile.age,
-      gender: profile.gender,
-    );
-    final initialBmr = AdaptiveCoachEngine.calculateBmr(
-      weightKg: initialWeight,
-      heightCm: profile.height,
-      ageYears: profile.age,
-      gender: profile.gender,
-    );
-    final activityMultiplier = double.tryParse(profile.activity) ?? 1.38;
-    final initialTdee = initialBmr * activityMultiplier;
-
-    AdaptiveCoachState currentState = AdaptiveCoachState.initial(
-      initialWeightKg: initialWeight,
-      initialTdeeKcal: initialTdee,
-      initialFatMassKg: initialFat,
-    );
-
-    int studyDay = 0;
-    final Map<String, double> computedTrendWeights = {};
-
-    while (!cursor.isAfter(today)) {
-      final dateKey = DateFormat('yyyy-MM-dd').format(cursor);
-      final weightReading = dailyWeightsMap[dateKey];
-
-      int validCount = 0;
-      double sumValidCals = 0.0;
-
-      for (int i = 1; i <= 14; i++) {
-        final lookbackDate = addCalendarDays(cursor, -i);
-        final lookbackKey = DateFormat('yyyy-MM-dd').format(lookbackDate);
-        final dayCal = dailyCaloriesMap[lookbackKey] ?? 0.0;
-
-        if (dayCal >= 450.0) {
-          validCount++;
-          sumValidCals += dayCal;
-        }
+      if (l.date.isNotEmpty) {
+        dailyCaloriesMap[l.date] =
+            (dailyCaloriesMap[l.date] ?? 0.0) + l.macros.calories;
       }
-
-      final validMean = validCount > 0 ? (sumValidCals / validCount) : 0.0;
-
-      currentState = AdaptiveCoachEngine.stepObserver(
-        prevState: currentState,
-        scaleWeightLogKg: weightReading,
-        validMeanCalories14d: validMean,
-        validIntakeDaysCount: validCount,
-        initialFatMassKg: initialFat,
-        heightCm: profile.height,
-        ageYears: profile.age,
-        gender: profile.gender,
-        studyDayIndex: studyDay,
-        activityMultiplier: activityMultiplier,
-      );
-
-      computedTrendWeights[dateKey] = currentState.estimatedMassKg;
-
-      studyDay++;
-      cursor = addCalendarDays(cursor, 1);
     }
 
-    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) return;
+    final sortedWeightDates = dailyWeightsMap.keys.toList()..sort();
+    final initialWeight = sortedWeightDates.isNotEmpty
+        ? dailyWeightsMap[sortedWeightDates.first]!
+        : (profile.weight > 0 ? profile.weight : 70.0);
+    final activityValue = double.tryParse(profile.activity);
+    final activityMultiplier = activityValue != null && activityValue > 0
+        ? activityValue
+        : 1.38;
+    final replay = replayCoach(
+      today: todayStr,
+      initialWeightKg: initialWeight,
+      heightCm: profile.height > 0 ? profile.height : 175.0,
+      ageYears: profile.age,
+      gender: profile.gender.isNotEmpty ? profile.gender : 'male',
+      activityMultiplier: activityMultiplier,
+      dailyCaloriesMap: dailyCaloriesMap,
+      dailyWeightsMap: dailyWeightsMap,
+    );
+    if (replay == null) return;
+    final currentState = replay.state;
+    final computedTrendWeights = replay.trendWeightsMap;
+
+    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) {
+      return;
+    }
     liveObserverStateNotifier.value = currentState;
     trendWeightsNotifier.value = computedTrendWeights;
 
@@ -210,113 +174,65 @@ class AdaptiveCoachService {
     final today = DateTime(now.year, now.month, now.day);
     final todayStr = DateFormat('yyyy-MM-dd').format(today);
 
-    final activePhase = profile.goalPhases.isNotEmpty ? profile.goalPhases.last : null;
-    DateTime lastCheckInDate = addCalendarDays(today, -8);
-
-    if (activePhase != null) {
-      if (activePhase.adjustments.isNotEmpty) {
-        try {
-          lastCheckInDate = DateFormat('yyyy-MM-dd').parse(activePhase.adjustments.last.date);
-        } catch (_) {}
-      } else {
-        try {
-          lastCheckInDate = DateFormat('yyyy-MM-dd').parse(activePhase.startDate);
-        } catch (_) {}
-      }
-    }
-
-    final daysSinceLastReview = calendarDaysBetween(lastCheckInDate, today);
-    if (daysSinceLastReview < 7) {
-      checkInProposalNotifier.value = null;
-      dismissedProposalNotifier.value = null;
-      return;
-    }
-
-    int validCalCount7d = 0;
-    int validWeightCount7d = 0;
-
-    for (int i = 1; i <= 7; i++) {
-      final dKey = DateFormat('yyyy-MM-dd').format(addCalendarDays(today, -i));
-      if ((dailyCaloriesMap[dKey] ?? 0.0) >= 450.0) validCalCount7d++;
-      if ((dailyWeightsMap[dKey] ?? 0.0) > 0.0) validWeightCount7d++;
-    }
-
-    if (validCalCount7d < 4 || validWeightCount7d < 3 || latestState.informationGain < 0.20) {
-      checkInProposalNotifier.value = null;
-      dismissedProposalNotifier.value = null;
-      return;
-    }
-
-    final goalOffset = double.tryParse(profile.goal) ?? 0.0;
-    final weeklyKgDelta = (goalOffset * 7.0) / 7700.0;
-    final proteinMultiplier = double.tryParse(profile.proteinMultiplier) ?? 2.0;
-
-    // Anchor the planned weight trajectory to the phase start, not the current profile weight.
-    double initialPhaseMass = profile.weight;
-    if (activePhase != null) {
-      final phaseStartDateKey = activePhase.startDate;
-      if (dailyWeightsMap.containsKey(phaseStartDateKey)) {
-        initialPhaseMass = dailyWeightsMap[phaseStartDateKey]!;
-      } else if (computedTrendWeights.containsKey(phaseStartDateKey)) {
-        initialPhaseMass = computedTrendWeights[phaseStartDateKey]!;
-      } else {
-        final sortedDates = dailyWeightsMap.keys.toList()..sort();
-        String? closestDate;
-        for (final d in sortedDates) {
-          if (d.compareTo(phaseStartDateKey) <= 0) {
-            closestDate = d;
-          } else {
-            break;
-          }
-        }
-        if (closestDate != null) {
-          initialPhaseMass = dailyWeightsMap[closestDate]!;
-        } else if (sortedDates.isNotEmpty) {
-          initialPhaseMass = dailyWeightsMap[sortedDates.first]!;
-        } else {
-          initialPhaseMass = profile.weight;
-        }
-      }
-    }
-
-    final phaseDaysElapsed = activePhase != null
-        ? calendarDaysBetween(DateFormat('yyyy-MM-dd').parse(activePhase.startDate), today)
-        : 14;
-
-    final prescription = AdaptiveCoachEngine.synthesizePrescription(
-      currentState: latestState,
-      initialPhaseMassKg: initialPhaseMass,
-      targetWeeklyWeightDeltaKg: weeklyKgDelta,
-      phaseDayIndex: phaseDaysElapsed,
-      proteinMultiplierGPerKg: proteinMultiplier,
+    final activePhase = profile.goalPhases.isNotEmpty
+        ? profile.goalPhases.last
+        : null;
+    final proteinValue = double.tryParse(profile.proteinMultiplier);
+    final calculation = evaluateCoachWeek(
+      today: todayStr,
+      phase: activePhase,
+      goalOffsetKcal: double.tryParse(profile.goal) ?? 0.0,
+      profileWeightKg: profile.weight > 0 ? profile.weight : 70.0,
+      proteinMultiplierGPerKg: proteinValue != null && proteinValue > 0
+          ? proteinValue
+          : 2.0,
+      currentCalories: profile.activeTargetCalories,
+      currentProteinG: profile.activeTargetProteinG,
+      currentCarbsG: profile.activeTargetCarbsG,
+      currentFatG: profile.activeTargetFatG,
+      state: latestState,
+      dailyCaloriesMap: dailyCaloriesMap,
+      dailyWeightsMap: dailyWeightsMap,
+      trendWeightsMap: computedTrendWeights,
     );
+    if (calculation == null) {
+      checkInProposalNotifier.value = null;
+      dismissedProposalNotifier.value = null;
+      return;
+    }
 
     final proposal = WeeklyCheckInProposal(
-      date: todayStr,
-      proposedCalories: prescription.caloriesKcal,
-      proposedProteinG: prescription.proteinG,
-      proposedCarbsG: prescription.carbsG,
-      proposedFatG: prescription.fatG,
-      currentCalories: profile.activeTargetCalories.round(),
-      currentProteinG: profile.activeTargetProteinG.round(),
-      currentCarbsG: profile.activeTargetCarbsG.round(),
-      currentFatG: profile.activeTargetFatG.round(),
-      currentTdeeKcal: latestState.tdeeKcal,
-      trendWeightKg: latestState.estimatedMassKg,
-      rateOfLossKgPerWeek: latestState.tissueVelocityKgPerDay * 7.0,
-      informationGain: latestState.informationGain,
+      date: calculation.date,
+      proposedCalories: calculation.proposedCalories,
+      proposedProteinG: calculation.proposedProteinG,
+      proposedCarbsG: calculation.proposedCarbsG,
+      proposedFatG: calculation.proposedFatG,
+      currentCalories: calculation.currentCalories,
+      currentProteinG: calculation.currentProteinG,
+      currentCarbsG: calculation.currentCarbsG,
+      currentFatG: calculation.currentFatG,
+      currentTdeeKcal: calculation.currentTdeeKcal,
+      trendWeightKg: calculation.trendWeightKg,
+      rateOfLossKgPerWeek: calculation.rateOfLossKgPerWeek,
+      informationGain: calculation.informationGain,
       stateSnapshot: latestState,
     );
 
     final prefs = await SharedPreferences.getInstance();
-    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) return;
+    if (revision != _recomputeRevision || uid != _firestoreService.currentUid) {
+      return;
+    }
     final dismissedDateStr = prefs.getString('dismissed_checkin_date_$uid');
 
     int daysSinceDismissal = 999;
     if (dismissedDateStr != null && dismissedDateStr.isNotEmpty) {
       try {
         final d = DateFormat('yyyy-MM-dd').parse(dismissedDateStr);
-        daysSinceDismissal = calendarDaysBetween(d, today);
+        daysSinceDismissal = DateTime.utc(
+          today.year,
+          today.month,
+          today.day,
+        ).difference(DateTime.utc(d.year, d.month, d.day)).inDays;
       } catch (_) {}
     }
 
@@ -348,7 +264,8 @@ class AdaptiveCoachService {
 
     if (updatedPhases.isNotEmpty) {
       final lastPhase = updatedPhases.removeLast();
-      final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)..add(newAdjustment);
+      final adjList = List<TargetAdjustment>.from(lastPhase.adjustments)
+        ..add(newAdjustment);
 
       updatedPhases.add(
         GoalPhase(
@@ -406,9 +323,7 @@ class AdaptiveCoachService {
       await prefs.remove('dismissed_checkin_date_$uid');
       if (uid != _firestoreService.currentUid) return;
 
-      await _firestoreService.saveSettings({
-        'dismissed_checkin_date': null,
-      });
+      await _firestoreService.saveSettings({'dismissed_checkin_date': null});
     }
 
     if (uid != _firestoreService.currentUid) return;
@@ -416,7 +331,8 @@ class AdaptiveCoachService {
   }
 
   Future<void> dismissProposal() async {
-    final proposal = checkInProposalNotifier.value ?? dismissedProposalNotifier.value;
+    final proposal =
+        checkInProposalNotifier.value ?? dismissedProposalNotifier.value;
     final uid = _firestoreService.currentUid;
 
     if (proposal != null && uid != null) {

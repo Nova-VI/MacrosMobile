@@ -2,58 +2,60 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_tracker_mobile/services/adaptive_coach_engine.dart';
 
 void main() {
-  group('AdaptiveCoachEngine cross-platform reference vector', () {
-    test('matches the web engine on day k=14', () {
-      final stateK13 = AdaptiveCoachState(
-        estimatedMassKg: 89.20,
-        tissueVelocityKgPerDay: -0.040,
-        p00: 0.042,
-        p01: 0.0012,
-        p10: 0.0012,
-        p11: 0.00015,
-        tdeeKcal: 2620.0,
-        latentIntakeBias: 0.88,
-        integratorKcalDays: 1.20,
-        resVariance: 0.0050,
-        biasVariance: 0.00005,
+  test('logged intake is not increased by an assumed reporting bias', () {
+    final state = AdaptiveCoachState.initial(
+      initialWeightKg: 70,
+      initialTdeeKcal: 2400,
+    );
+    final next = AdaptiveCoachEngine.stepObserver(
+      prevState: state,
+      scaleWeightLogKg: 70,
+      validMeanCalories14d: 2400,
+      validIntakeDaysCount: 14,
+      initialFatMassKg: 20,
+      heightCm: 175,
+      ageYears: 30,
+      gender: 'male',
+      studyDayIndex: 30,
+    );
+    expect(next.tdeeKcal, lessThanOrEqualTo(2400));
+  });
+
+  PrescriptionVector prescribe({
+    required double mass,
+    required double velocity,
+    double tdee = 2600,
+    double target = 2500,
+  }) => AdaptiveCoachEngine.synthesizePrescription(
+        currentState: AdaptiveCoachState(
+          estimatedMassKg: mass,
+          tissueVelocityKgPerDay: velocity,
+          tdeeKcal: tdee,
+          tissueEnthalpy: 7000,
+        ),
+        initialPhaseMassKg: 80,
+        targetWeeklyWeightDeltaKg: 0.2,
+        phaseDayIndex: 35,
+        currentTargetCaloriesKcal: target,
+        proteinMultiplierGPerKg: 2,
       );
 
-      final stateK14 = AdaptiveCoachEngine.stepObserver(
-        prevState: stateK13,
-        scaleWeightLogKg: 89.40,
-        validMeanCalories14d: 2100.0,
-        validIntakeDaysCount: 12,
-        initialFatMassKg: 21.69,
-        heightCm: 180.0,
-        ageYears: 30,
-        gender: 'male',
-        studyDayIndex: 14,
-        activityMultiplier: 1.38,
-      );
+  test('above-path bulk lowers current target despite high TDEE', () {
+    final proposal = prescribe(mass: 84, velocity: 0.07, tdee: 3000);
+    expect(proposal.caloriesKcal, 2300);
+  });
 
-      expect(stateK14.estimatedMassKg, closeTo(89.188, 0.001));
-      expect(stateK14.tissueVelocityKgPerDay, closeTo(-0.03918, 0.0001));
+  test('weekly change is capped and never rises while far above path', () {
+    final proposal = prescribe(mass: 84, velocity: -0.1, tdee: 3000);
+    expect(proposal.caloriesKcal, 2500);
+    final slower = prescribe(mass: 84, velocity: 0.02);
+    expect(slower.caloriesKcal, inInclusiveRange(2300, 2500));
+  });
 
-      expect(stateK14.tissueEnthalpy, closeTo(6936.9274, 0.01));
-      expect(stateK14.informationGain, closeTo(0.7610446, 0.0001));
-
-      expect(stateK14.tdeeKcal, closeTo(2623.3232, 0.05));
-
-      final prescription = AdaptiveCoachEngine.synthesizePrescription(
-        currentState: stateK14,
-        initialPhaseMassKg: 90.0,
-        targetWeeklyWeightDeltaKg: -0.50,
-        phaseDayIndex: 14,
-        proteinMultiplierGPerKg: 2.0,
-        lipidFloorMultiplierGPerKg: 0.60,
-      );
-
-      expect(prescription.piAdjustmentKcal, closeTo(197.8840, 0.1));
-      expect(prescription.caloriesKcal, equals(1875));
-
-      expect(prescription.proteinG, equals(178));
-      expect(prescription.fatG, equals(54));
-      expect(prescription.carbsG, equals(169));
-    });
+  test('on-path trend at goal velocity holds current target', () {
+    final goalVelocity = 0.2 / 7;
+    final goalMass = 80 + 35 * goalVelocity;
+    final proposal = prescribe(mass: goalMass, velocity: goalVelocity);
+    expect(proposal.caloriesKcal, 2500);
   });
 }
