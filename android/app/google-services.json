@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "589280308784-ms306qhs1e3m1sl8njod2n5fassqjvs1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.macrotracker.macro_tracker_mobile",
+            "certificate_hash": "9686648631ba50e190ca96d9c4774302c2ceb48f"
+          }
+        },
+        {
+          "client_id": "589280308784-oflti4jhckpge6g37vkoo2h0s6a5ig62.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.macrotracker.macro_tracker_mobile",
+            "certificate_hash": "0a30faff00bad443b1ed98ff067b2973f7767e1e"
+          }
+        },
+        {
           "client_id": "589280308784-n1lb9srt8u6cqobvj5nvgsrjer4nmi3g.apps.googleusercontent.com",
           "client_type": 3
         }

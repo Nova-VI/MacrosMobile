@@ -350,14 +350,12 @@ extension UserProfileGoalExtension on UserProfile {
         final beforeEnd = phase.endDate == null || dateStr.compareTo(phase.endDate!) <= 0;
         if (afterStart && beforeEnd) {
           if (phase.adjustments.isNotEmpty) {
-            final sortedAdj = List<TargetAdjustment>.from(phase.adjustments)
-              ..sort((a, b) => a.date.compareTo(b.date));
             TargetAdjustment? matchedAdj;
-            for (final adj in sortedAdj) {
-              if (adj.date.compareTo(dateStr) <= 0) {
+            for (final adj in phase.adjustments) {
+              // Later entries on the same day supersede earlier ones.
+              if (adj.date.compareTo(dateStr) <= 0 &&
+                  (matchedAdj == null || adj.date.compareTo(matchedAdj.date) >= 0)) {
                 matchedAdj = adj;
-              } else {
-                break;
               }
             }
             if (matchedAdj != null) {
