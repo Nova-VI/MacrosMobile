@@ -8,6 +8,8 @@ import '../models/weight_log.dart';
 import '../services/firestore_service.dart';
 import '../services/adaptive_coach_service.dart';
 import '../theme/app_theme.dart';
+import '../models/user_profile.dart';
+import '../utils/weight_goal.dart';
 
 class WeightTrackerScreen extends StatefulWidget {
   final bool autoEditLatest;
@@ -29,6 +31,7 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   String _activePreset = 'month';
   bool _isHistoryExpanded = false;
   bool _focusTrend = false;
+  bool _showGoalPath = false;
   DateTime? _customStartDate;
   DateTime? _customEndDate;
 
@@ -85,6 +88,41 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
 
   Future<void> _openCustomDateFilter() async {
     HapticFeedback.lightImpact();
+    final today = DateTime.now();
+    final phaseStart = currentPhaseStartDate(_firestoreService.profileNotifier.value, today);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (phaseStart != null)
+              ListTile(
+                leading: Icon(Icons.flag_outlined, color: AppColors.warning),
+                title: const Text('Use current phase start'),
+                subtitle: Text(DateFormat('MMM d, yyyy').format(phaseStart)),
+                onTap: () => Navigator.pop(sheetContext, 'phase'),
+              ),
+            ListTile(
+              leading: Icon(Icons.date_range_rounded, color: AppColors.primary),
+              title: const Text('Choose dates'),
+              onTap: () => Navigator.pop(sheetContext, 'dates'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'phase' && phaseStart != null) {
+      setState(() {
+        _activePreset = 'custom';
+        _customStartDate = phaseStart;
+        _customEndDate = DateTime(today.year, today.month, today.day);
+      });
+      return;
+    }
+    if (choice != 'dates') return;
     final range = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
@@ -142,6 +180,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
   void _showToast(String message, {bool isError = false}) =>
       showAppToast(context, message, isError: isError);
 
+  String _formatWeightChange(double change) =>
+      '${change > 0 ? '+' : ''}${change.toStringAsFixed(1)} kg';
+
   List<WeightLog> _filterLogs(List<WeightLog> allLogs) {
     if (allLogs.isEmpty) return [];
 
@@ -182,7 +223,9 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
             final filteredLogs = _filterLogs(allLogs);
             final historyDesc = List<WeightLog>.from(filteredLogs).reversed.toList();
 
-            return Scaffold(
+            return ValueListenableBuilder<UserProfile>(
+              valueListenable: _firestoreService.profileNotifier,
+              builder: (context, profile, _) => Scaffold(
               appBar: widget.autoEditLatest
                   ? AppBar(
                       title: const Text('Weight Tracker'),
@@ -199,11 +242,12 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   children: [
                     _buildQuickLogCard(),
                     const SizedBox(height: 14),
-                    _buildChartCard(filteredLogs, trendWeightsMap),
+                    _buildChartCard(filteredLogs, trendWeightsMap, profile),
                     const SizedBox(height: 14),
                     _buildHistorySection(historyDesc, trendWeightsMap),
                   ],
                 ),
+              ),
               ),
             );
           },
@@ -285,8 +329,18 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     );
   }
 
-  Widget _buildChartCard(List<WeightLog> logs, Map<String, double> trendWeightsMap) {
+  Widget _buildChartCard(List<WeightLog> logs, Map<String, double> trendWeightsMap, UserProfile profile) {
     final latestScale = logs.isNotEmpty ? logs.last.weightKg : null;
+    final today = DateTime.now();
+    final periodStart = _activePreset == 'week' ? today.subtract(const Duration(days: 6))
+        : _activePreset == 'month' ? today.subtract(const Duration(days: 29))
+        : _activePreset == 'custom' ? _customStartDate
+        : (logs.isNotEmpty ? DateTime.tryParse(logs.first.date) : null);
+    final periodEnd = _activePreset == 'custom' ? _customEndDate
+        : _activePreset == 'all' ? (logs.isNotEmpty ? DateTime.tryParse(logs.last.date) : null)
+        : today;
+    final weightChange = periodStart != null && periodEnd != null
+        ? periodTrendChange(trendWeightsMap, periodStart, periodEnd) : null;
     final latestTrend = logs.isNotEmpty
         ? (trendWeightsMap[logs.last.date] ?? AdaptiveCoachService().liveObserverStateNotifier.value?.estimatedMassKg)
         : null;
@@ -309,7 +363,8 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textMain),
               ),
 
-              InkWell(
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                InkWell(
                 onTap: () {
                   HapticFeedback.selectionClick();
                   setState(() => _focusTrend = !_focusTrend);
@@ -344,7 +399,20 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                     ],
                   ),
                 ),
-              ),
+                ),
+                PopupMenuButton<bool>(
+                  tooltip: 'Weight chart options',
+                  icon: const Icon(Icons.more_vert_rounded, color: AppColors.textMuted),
+                  onSelected: (value) => setState(() => _showGoalPath = value),
+                  itemBuilder: (_) => [
+                    CheckedPopupMenuItem<bool>(
+                      value: !_showGoalPath,
+                      checked: _showGoalPath,
+                      child: const Text('Show goal path'),
+                    ),
+                  ],
+                ),
+              ]),
             ],
           ),
 
@@ -388,6 +456,17 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
               ],
             ),
           ],
+          if (weightChange != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Trend change in selected period: ${_formatWeightChange(weightChange)}',
+              style: const TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+            ),
+          ] else ...[
+            const SizedBox(height: 6),
+            const Text('Trend change in selected period: —',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+          ],
           const SizedBox(height: 12),
 
           SizedBox(
@@ -414,9 +493,12 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
           ),
           const SizedBox(height: 12),
 
-          Row(
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     width: 14,
@@ -433,8 +515,8 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   ),
                 ],
               ),
-              const SizedBox(width: 16),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     width: 14,
@@ -448,20 +530,31 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                   ),
                 ],
               ),
+              if (_showGoalPath)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 14, height: 2, color: AppColors.warning),
+                    const SizedBox(width: 6),
+                    const Text('Goal Path (Dashed)',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted)),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 16),
 
           SizedBox(
             height: 200,
-            child: logs.length < 2
+            child: logs.isEmpty || (logs.length < 2 && !_showGoalPath)
                 ? Center(
                     child: Text(
                       logs.isEmpty ? 'No weight logs in this period.' : 'Log at least 2 days to render curve.',
                       style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
                     ),
                   )
-                : _buildWeightLineChart(logs, trendWeightsMap),
+                : _buildWeightLineChart(logs, trendWeightsMap, profile),
           ),
         ],
       ),
@@ -501,21 +594,26 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
     );
   }
 
-  Widget _buildWeightLineChart(List<WeightLog> logs, Map<String, double> trendWeightsMap) {
+  Widget _buildWeightLineChart(List<WeightLog> logs, Map<String, double> trendWeightsMap, UserProfile profile) {
     final parsedDates = logs.map((l) {
       try {
-        return DateTime.parse(l.date);
+        return DateTime.parse('${l.date}T00:00:00Z');
       } catch (_) {
         return DateTime.now();
       }
     }).toList();
 
     final minDate = parsedDates.reduce((a, b) => a.isBefore(b) ? a : b);
-    final maxDate = parsedDates.reduce((a, b) => a.isAfter(b) ? a : b);
+    final lastLogDate = parsedDates.reduce((a, b) => a.isAfter(b) ? a : b);
+    final periodEnd = _activePreset == 'custom' ? _customEndDate
+        : (_activePreset == 'week' || _activePreset == 'month') ? DateTime.now() : null;
+    final maxDate = _showGoalPath && periodEnd != null && periodEnd.isAfter(lastLogDate)
+        ? DateTime.utc(periodEnd.year, periodEnd.month, periodEnd.day) : lastLogDate;
     final totalDaysSpan = math.max(1, maxDate.difference(minDate).inDays).toDouble();
 
     final scaleSpots = <FlSpot>[];
     final trendSpots = <FlSpot>[];
+    final goalSpots = <FlSpot>[];
     double minWeight = logs.first.weightKg;
     double maxWeight = logs.first.weightKg;
 
@@ -532,6 +630,17 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
       final dayOffset = parsedDates[i].difference(minDate).inDays.toDouble();
       scaleSpots.add(FlSpot(dayOffset, w));
       trendSpots.add(FlSpot(dayOffset, trend));
+    }
+
+    if (_showGoalPath) {
+      for (int day = 0; day <= totalDaysSpan.toInt(); day++) {
+        final weight = goalWeightAtDate(profile, _firestoreService.weightLogsNotifier.value,
+            minDate.add(Duration(days: day)), trendWeightsMap: trendWeightsMap);
+        if (weight == null) continue;
+        goalSpots.add(FlSpot(day.toDouble(), weight));
+        if (weight < minWeight) minWeight = weight;
+        if (weight > maxWeight) maxWeight = weight;
+      }
     }
 
     final weightDelta = maxWeight - minWeight;
@@ -615,6 +724,10 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
 
                 final scaleVal = matchedLog?.weightKg;
                 final trendVal = matchedLog != null ? (trendWeightsMap[matchedLog.date] ?? matchedLog.trendWeightKg) : null;
+                final goalVal = _showGoalPath
+                    ? goalWeightAtDate(profile, _firestoreService.weightLogsNotifier.value,
+                        targetDate, trendWeightsMap: trendWeightsMap)
+                    : null;
 
                 return LineTooltipItem(
                   '$dateStr\n',
@@ -631,12 +744,18 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
                       ),
                     if (trendVal != null)
                       TextSpan(
-                        text: 'Trend: ${trendVal.toStringAsFixed(1)} kg',
+                        text: 'Trend: ${trendVal.toStringAsFixed(1)} kg${goalVal != null ? '\n' : ''}',
                         style: TextStyle(
                           color: _focusTrend ? AppColors.primary : AppColors.textMuted,
                           fontSize: 12.5,
                           fontWeight: _focusTrend ? FontWeight.w900 : FontWeight.w700,
                         ),
+                      ),
+                    if (goalVal != null)
+                      TextSpan(
+                        text: 'Goal path: ${goalVal.toStringAsFixed(1)} kg',
+                        style: const TextStyle(color: AppColors.warning, fontSize: 12.5,
+                            fontWeight: FontWeight.w700),
                       ),
                   ],
                 );
@@ -675,6 +794,16 @@ class _WeightTrackerScreenState extends State<WeightTrackerScreen> {
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(show: false),
           ),
+          if (goalSpots.isNotEmpty)
+            LineChartBarData(
+              spots: goalSpots,
+              isCurved: false,
+              color: AppColors.warning,
+              barWidth: 2,
+              dashArray: [7, 4],
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(show: false),
+            ),
         ],
       ),
     );
