@@ -11,6 +11,16 @@ class MacroNutrients {
     this.fatG = 0.0,
   });
 
+  double get calculatedCalories => proteinG * 4 + carbsG * 4 + fatG * 9;
+
+  bool get hasCalorieOverride {
+    // Saved inputs round macros to 0.1g and calories to whole kcal.
+    // Their combined rounding error can reach 0.05 * (4 + 4 + 9) + 0.5.
+    const roundingTolerance = 1.35;
+    return calories > 0 &&
+        (calories - calculatedCalories).abs() > roundingTolerance + 1e-9;
+  }
+
   factory MacroNutrients.fromMap(Map<String, dynamic>? data) {
     if (data == null) return const MacroNutrients();
     return MacroNutrients(

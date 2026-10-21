@@ -181,10 +181,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
   void _initEditMode(DailyLog log) {
     _editingLogId = log.id;
-    final macroCalories = log.macros.proteinG * 4 +
-        log.macros.carbsG * 4 + log.macros.fatG * 9;
-    _isManualCalories = log.macros.calories > 0 &&
-        (log.macros.calories - macroCalories).abs() > 0.5;
+    _isManualCalories = log.macros.hasCalorieOverride;
     _isLibraryBound = true;
     _selectedEmoji = log.emoji.isNotEmpty ? log.emoji : '🍽️';
     _nameController.text = log.foodName;
@@ -205,7 +202,9 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
     _proteinController.text = log.macros.proteinG > 0 ? log.macros.proteinG.toStringAsFixed(1) : '';
     _carbsController.text = log.macros.carbsG > 0 ? log.macros.carbsG.toStringAsFixed(1) : '';
     _fatController.text = log.macros.fatG > 0 ? log.macros.fatG.toStringAsFixed(1) : '';
-    _caloriesController.text = log.macros.calories > 0 ? log.macros.calories.round().toString() : '';
+    final calories = _isManualCalories
+        ? log.macros.calories : log.macros.calculatedCalories;
+    _caloriesController.text = calories > 0 ? calories.round().toString() : '';
 
     _fiberController.text = log.micros.fiberG > 0 ? log.micros.fiberG.toStringAsFixed(1) : '';
     _sugarController.text = log.micros.sugarG > 0 ? log.micros.sugarG.toStringAsFixed(1) : '';
@@ -619,10 +618,7 @@ class _LogFoodScreenState extends State<LogFoodScreen> {
 
   void _populateFromLibraryItem(FoodItem food, {String? preserveTypedName}) {
     _currentBaseFood = food;
-    final calculatedCalories = food.macros.proteinG * 4.0 +
-        food.macros.carbsG * 4.0 + food.macros.fatG * 9.0;
-    _isManualCalories = food.macros.calories > 0 &&
-        (food.macros.calories - calculatedCalories).abs() > 0.5;
+    _isManualCalories = food.macros.hasCalorieOverride;
     _isLibraryBound = true;
     _selectedEmoji = food.emoji.isNotEmpty ? food.emoji : '🍽️';
     _selectedBaseUnit = food.baseUnit;

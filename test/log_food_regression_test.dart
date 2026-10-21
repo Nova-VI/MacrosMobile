@@ -21,6 +21,32 @@ void main() {
   setupFirebaseCoreMocks();
   setUpAll(() async => Firebase.initializeApp());
 
+  testWidgets('rounded egg log stays automatic through zero servings', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: LogFoodScreen(
+      editLog: DailyLog(
+        id: 'egg', date: '2026-10-20', loggedAt: '2026-10-20T12:00:00',
+        foodName: 'Egg', servings: 1, servingSizeG: 50,
+        macros: const MacroNutrients(calories: 69, proteinG: 6.3,
+            carbsG: 0.4, fatG: 4.8),
+        micros: const MicroNutrients(),
+      ),
+      onLogCompleted: () {},
+    )));
+    await tester.pump();
+    await tester.ensureVisible(field('Calories (kcal)'));
+    expect(tester.widget<TextField>(field('Calories (kcal)')).controller!.text, '70');
+    expect(find.text('✎ manual'), findsNothing);
+    for (final servings in ['0', '1']) {
+      await tester.ensureVisible(field('Servings Multiplier'));
+      await tester.enterText(field('Servings Multiplier'), servings);
+      await tester.pump();
+    }
+    await tester.ensureVisible(field('Calories (kcal)'));
+    expect(tester.widget<TextField>(field('Calories (kcal)')).controller!.text, '70');
+    expect(find.text('✎ manual'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('editing a manual calorie log preserves its calorie ratio', (tester) async {
     await tester.pumpWidget(MaterialApp(home: LogFoodScreen(
       editLog: DailyLog(
